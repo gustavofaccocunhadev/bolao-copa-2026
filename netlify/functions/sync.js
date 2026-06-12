@@ -43,9 +43,10 @@ export async function handler(event, context) {
 
     if (checkError) throw checkError;
 
+    const force = event.queryStringParameters && event.queryStringParameters.force === "true";
     const hasActiveMatches = activeMatches && activeMatches.length > 0;
 
-    if (!hasActiveMatches) {
+    if (!hasActiveMatches && !force) {
       console.log("Nenhum jogo ativo ou programado para este horário. Ignorando sincronização.");
       return {
         statusCode: 200,
