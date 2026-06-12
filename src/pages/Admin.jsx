@@ -151,7 +151,7 @@ export default function Admin() {
     addToast('Iniciando sincronização de jogos e placares...', 'info')
     
     try {
-      const res = await fetch("/api/sync?key=ObruxoSyncSecret2026&force=true")
+      const res = await fetch("https://bolaodobruxo.netlify.app/.netlify/functions/sync?key=ObruxoSyncSecret2026&force=true")
       const data = await res.json()
       
       if (!res.ok) {
