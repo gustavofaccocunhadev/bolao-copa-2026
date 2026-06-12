@@ -1,4 +1,6 @@
-import { Link } from 'react-router-dom'
+import { useEffect } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { useAuth } from '../contexts/AuthContext'
 
 const features = [
   {
@@ -24,6 +26,23 @@ const features = [
 ]
 
 export default function Landing() {
+  const navigate = useNavigate()
+  const { user, loading } = useAuth()
+
+  useEffect(() => {
+    if (user && !loading) {
+      navigate('/dashboard')
+    }
+  }, [user, loading, navigate])
+
+  if (loading) {
+    return (
+      <div className="loading-center" style={{ minHeight: '100vh' }}>
+        <div className="spinner" />
+      </div>
+    )
+  }
+
   return (
     <div>
       {/* Hero */}

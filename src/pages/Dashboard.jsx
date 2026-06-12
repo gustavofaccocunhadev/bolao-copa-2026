@@ -60,15 +60,16 @@ export default function Dashboard() {
         rank: myIndex >= 0 ? myIndex + 1 : '-'
       })
 
-      // 3. Próximas 5 partidas
+      // 3. Próximas partidas (buscamos mais para filtrar apenas as confirmadas no frontend)
       const { data: upcomingData } = await supabase
         .from('matches')
         .select('*')
         .eq('status', 'upcoming')
         .order('scheduled_at', { ascending: true })
-        .limit(5)
+        .limit(50)
 
-      setUpcoming(upcomingData || [])
+      const confirmedUpcoming = (upcomingData || []).filter(isMatchConfirmed).slice(0, 5)
+      setUpcoming(confirmedUpcoming)
 
       // 4. Últimos 5 resultados finalizados
       const { data: finishedData } = await supabase
@@ -80,7 +81,7 @@ export default function Dashboard() {
 
       // 5. Busca palpites do usuário para associar às partidas
       const matchIds = [
-        ...(upcomingData || []).map((m) => m.id),
+        ...confirmedUpcoming.map((m) => m.id),
         ...(finishedData || []).map((m) => m.id)
       ]
 
@@ -142,6 +143,24 @@ export default function Dashboard() {
     })
   }
 
+  const handleDirectScoreChange = (matchId, team, value) => {
+    let newVal = value === '' ? '' : parseInt(value, 10)
+    if (newVal !== '' && (isNaN(newVal) || newVal < 0)) {
+      newVal = 0
+    }
+    
+    setTempScores((prev) => {
+      const current = prev[matchId] || { home: 0, away: 0 }
+      return {
+        ...prev,
+        [matchId]: {
+          ...current,
+          [team]: newVal
+        }
+      }
+    })
+  }
+
   const handleSaveGuess = async (matchId) => {
     const score = tempScores[matchId]
     if (!score) return
@@ -159,8 +178,8 @@ export default function Dashboard() {
         user_id: user.id,
         match_id: matchId,
         group_id: null,
-        home_score: score.home,
-        away_score: score.away
+        home_score: score.home === '' ? 0 : parseInt(score.home, 10),
+        away_score: score.away === '' ? 0 : parseInt(score.away, 10)
       }
 
       if (existingGuess) {
@@ -345,23 +364,30 @@ export default function Dashboard() {
                           Aguardando times 🕒
                         </div>
                       ) : !locked ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)', marginTop: 'var(--space-3)', justifyContent: 'center' }}>
                           <button 
                             type="button" 
-                            className="btn btn-secondary btn-sm"
-                            style={{ minWidth: '24px', padding: '0px 4px' }}
+                            className="btn-arrow"
                             onClick={() => handleScoreChange(match.id, 'home', 'dec')}
+                            disabled={savingId === match.id}
                           >
                             ‹
                           </button>
-                          <span style={{ fontWeight: '800', fontSize: 'var(--font-base)', width: '16px', textAlign: 'center' }}>
-                            {score.home}
-                          </span>
+                          <div className="score-box">
+                            <input
+                              type="number"
+                              min="0"
+                              className="score-box-input"
+                              value={score.home}
+                              onChange={(e) => handleDirectScoreChange(match.id, 'home', e.target.value)}
+                              disabled={savingId === match.id}
+                            />
+                          </div>
                           <button 
                             type="button" 
-                            className="btn btn-secondary btn-sm"
-                            style={{ minWidth: '24px', padding: '0px 4px' }}
+                            className="btn-arrow"
                             onClick={() => handleScoreChange(match.id, 'home', 'inc')}
+                            disabled={savingId === match.id}
                           >
                             ›
                           </button>
@@ -392,23 +418,30 @@ export default function Dashboard() {
                           Aguardando times 🕒
                         </div>
                       ) : !locked ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)', marginTop: 'var(--space-3)', justifyContent: 'center' }}>
                           <button 
                             type="button" 
-                            className="btn btn-secondary btn-sm"
-                            style={{ minWidth: '24px', padding: '0px 4px' }}
+                            className="btn-arrow"
                             onClick={() => handleScoreChange(match.id, 'away', 'dec')}
+                            disabled={savingId === match.id}
                           >
                             ‹
                           </button>
-                          <span style={{ fontWeight: '800', fontSize: 'var(--font-base)', width: '16px', textAlign: 'center' }}>
-                            {score.away}
-                          </span>
+                          <div className="score-box">
+                            <input
+                              type="number"
+                              min="0"
+                              className="score-box-input"
+                              value={score.away}
+                              onChange={(e) => handleDirectScoreChange(match.id, 'away', e.target.value)}
+                              disabled={savingId === match.id}
+                            />
+                          </div>
                           <button 
                             type="button" 
-                            className="btn btn-secondary btn-sm"
-                            style={{ minWidth: '24px', padding: '0px 4px' }}
+                            className="btn-arrow"
                             onClick={() => handleScoreChange(match.id, 'away', 'inc')}
+                            disabled={savingId === match.id}
                           >
                             ›
                           </button>
@@ -431,7 +464,15 @@ export default function Dashboard() {
                     ) : !locked ? (
                       <button
                         type="button"
-                        className={`btn btn-block btn-sm ${hasGuess ? 'btn-secondary' : 'btn-primary'}`}
+                        className="btn btn-block btn-sm"
+                        style={{
+                          background: hasGuess ? 'var(--bg-secondary)' : '#0f2c59',
+                          borderColor: hasGuess ? 'var(--border-color)' : '#1e3a8a',
+                          color: hasGuess ? 'var(--text-secondary)' : '#93c5fd',
+                          fontWeight: '700',
+                          letterSpacing: '0.5px',
+                          textTransform: 'uppercase'
+                        }}
                         onClick={() => handleSaveGuess(match.id)}
                         disabled={savingId === match.id}
                       >

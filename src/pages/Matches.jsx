@@ -82,7 +82,9 @@ export default function Matches() {
         }
       })
 
-      setMatches(matchesData || [])
+      // Filtra partidas para exibir apenas as confirmadas na listagem geral do usuário
+      const confirmedMatches = (matchesData || []).filter(isMatchConfirmed)
+      setMatches(confirmedMatches)
       setGuesses(guessMap)
       setTempScores(scoresMap)
     } catch (err) {
@@ -111,6 +113,24 @@ export default function Matches() {
     })
   }
 
+  const handleDirectScoreChange = (matchId, team, value) => {
+    let newVal = value === '' ? '' : parseInt(value, 10)
+    if (newVal !== '' && (isNaN(newVal) || newVal < 0)) {
+      newVal = 0
+    }
+    
+    setTempScores((prev) => {
+      const current = prev[matchId] || { home: 0, away: 0 }
+      return {
+        ...prev,
+        [matchId]: {
+          ...current,
+          [team]: newVal
+        }
+      }
+    })
+  }
+
   const handleSaveGuess = async (matchId) => {
     const score = tempScores[matchId]
     if (!score) return
@@ -128,8 +148,8 @@ export default function Matches() {
         user_id: user.id,
         match_id: matchId,
         group_id: null,
-        home_score: score.home,
-        away_score: score.away
+        home_score: score.home === '' ? 0 : parseInt(score.home, 10),
+        away_score: score.away === '' ? 0 : parseInt(score.away, 10)
       }
 
       if (existingGuess) {
@@ -304,23 +324,28 @@ export default function Matches() {
                         Aguardando times 🕒
                       </div>
                     ) : !locked ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginTop: 'var(--space-3)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)', marginTop: 'var(--space-3)', justifyContent: 'center' }}>
                         <button 
                           type="button" 
-                          className="btn btn-secondary btn-sm" 
-                          style={{ minWidth: '28px', padding: 'var(--space-1)' }}
+                          className="btn-arrow" 
                           onClick={() => handleScoreChange(match.id, 'home', 'dec')}
                           disabled={savingId === match.id}
                         >
                           ‹
                         </button>
-                        <span style={{ fontSize: 'var(--font-lg)', fontWeight: '800', width: '20px', textAlign: 'center' }}>
-                          {score.home}
-                        </span>
+                        <div className="score-box">
+                          <input
+                            type="number"
+                            min="0"
+                            className="score-box-input"
+                            value={score.home}
+                            onChange={(e) => handleDirectScoreChange(match.id, 'home', e.target.value)}
+                            disabled={savingId === match.id}
+                          />
+                        </div>
                         <button 
                           type="button" 
-                          className="btn btn-secondary btn-sm" 
-                          style={{ minWidth: '28px', padding: 'var(--space-1)' }}
+                          className="btn-arrow" 
                           onClick={() => handleScoreChange(match.id, 'home', 'inc')}
                           disabled={savingId === match.id}
                         >
@@ -364,23 +389,28 @@ export default function Matches() {
                         Aguardando times 🕒
                       </div>
                     ) : !locked ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginTop: 'var(--space-3)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)', marginTop: 'var(--space-3)', justifyContent: 'center' }}>
                         <button 
                           type="button" 
-                          className="btn btn-secondary btn-sm" 
-                          style={{ minWidth: '28px', padding: 'var(--space-1)' }}
+                          className="btn-arrow" 
                           onClick={() => handleScoreChange(match.id, 'away', 'dec')}
                           disabled={savingId === match.id}
                         >
                           ‹
                         </button>
-                        <span style={{ fontSize: 'var(--font-lg)', fontWeight: '800', width: '20px', textAlign: 'center' }}>
-                          {score.away}
-                        </span>
+                        <div className="score-box">
+                          <input
+                            type="number"
+                            min="0"
+                            className="score-box-input"
+                            value={score.away}
+                            onChange={(e) => handleDirectScoreChange(match.id, 'away', e.target.value)}
+                            disabled={savingId === match.id}
+                          />
+                        </div>
                         <button 
                           type="button" 
-                          className="btn btn-secondary btn-sm" 
-                          style={{ minWidth: '28px', padding: 'var(--space-1)' }}
+                          className="btn-arrow" 
                           onClick={() => handleScoreChange(match.id, 'away', 'inc')}
                           disabled={savingId === match.id}
                         >
@@ -405,10 +435,18 @@ export default function Matches() {
                   ) : !locked ? (
                     <button
                       type="button"
-                      className={`btn btn-block ${hasGuess ? 'btn-secondary' : 'btn-primary'}`}
+                      className="btn btn-block"
+                      style={{
+                        background: hasGuess ? 'var(--bg-secondary)' : '#0f2c59',
+                        borderColor: hasGuess ? 'var(--border-color)' : '#1e3a8a',
+                        color: hasGuess ? 'var(--text-secondary)' : '#93c5fd',
+                        fontWeight: '700',
+                        letterSpacing: '0.5px',
+                        textTransform: 'uppercase',
+                        fontSize: 'var(--font-xs)'
+                      }}
                       onClick={() => handleSaveGuess(match.id)}
                       disabled={savingId === match.id}
-                      style={{ fontSize: 'var(--font-xs)', textTransform: 'uppercase', letterSpacing: '0.5px' }}
                     >
                       {savingId === match.id ? 'Salvando...' : hasGuess ? 'Atualizar Palpite' : 'Salvar Palpite'}
                     </button>

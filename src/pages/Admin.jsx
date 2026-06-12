@@ -12,15 +12,6 @@ export default function Admin() {
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
 
-  // Form de cadastro de partida
-  const [homeTeam, setHomeTeam] = useState('')
-  const [awayTeam, setAwayTeam] = useState('')
-  const [homeFlag, setHomeFlag] = useState('🏳️')
-  const [awayFlag, setAwayFlag] = useState('🏳️')
-  const [scheduledAt, setScheduledAt] = useState('')
-  const [stage, setStage] = useState('group_stage')
-  const [groupLabel, setGroupLabel] = useState('')
-
   // Modal de finalização
   const [selectedMatch, setSelectedMatch] = useState(null)
   const [homeScoreResult, setHomeScoreResult] = useState('')
@@ -60,47 +51,6 @@ export default function Admin() {
     }
   }
 
-  const handleCreateMatch = async (e) => {
-    e.preventDefault()
-    if (!homeTeam.trim() || !awayTeam.trim() || !scheduledAt) {
-      addToast('Preencha os campos obrigatórios!', 'error')
-      return
-    }
-
-    setActionLoading(true)
-    try {
-      const { error } = await supabase
-        .from('matches')
-        .insert({
-          home_team: homeTeam.trim(),
-          away_team: awayTeam.trim(),
-          home_flag: homeFlag,
-          away_flag: awayFlag,
-          scheduled_at: new Date(scheduledAt).toISOString(),
-          stage,
-          group_label: stage === 'group_stage' ? groupLabel.trim() || 'Sem grupo' : null,
-          status: 'upcoming'
-        })
-
-      if (error) throw error
-
-      addToast('Partida cadastrada com sucesso!', 'success')
-      // Limpa formulário
-      setHomeTeam('')
-      setAwayTeam('')
-      setHomeFlag('🏳️')
-      setAwayFlag('🏳️')
-      setScheduledAt('')
-      setGroupLabel('')
-      
-      loadMatches()
-    } catch (err) {
-      console.error('Erro ao cadastrar partida:', err)
-      addToast('Erro ao cadastrar partida: ' + err.message, 'error')
-    } finally {
-      setActionLoading(false)
-    }
-  }
 
   const openFinalizeModal = (match) => {
     setSelectedMatch(match)
@@ -305,111 +255,7 @@ export default function Admin() {
         </button>
       </div>
 
-      <div className="grid-2">
-        {/* Formulário de cadastro de partida */}
-        <div className="card">
-          <h2 style={{ fontSize: 'var(--font-lg)', fontWeight: '700', marginBottom: 'var(--space-6)' }}>
-            Cadastrar Nova Partida
-          </h2>
-          <form onSubmit={handleCreateMatch}>
-            <div className="grid-2" style={{ gap: 'var(--space-4)', marginBottom: '0' }}>
-              <div className="form-group">
-                <label className="form-label">Time Mandante</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="Ex: Brasil"
-                  value={homeTeam}
-                  onChange={(e) => setHomeTeam(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Emoji Bandeira Mandante</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="Ex: 🇧🇷"
-                  value={homeFlag}
-                  onChange={(e) => setHomeFlag(e.target.value)}
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="grid-2" style={{ gap: 'var(--space-4)', marginBottom: '0' }}>
-              <div className="form-group">
-                <label className="form-label">Time Visitante</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="Ex: Itália"
-                  value={awayTeam}
-                  onChange={(e) => setAwayTeam(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Emoji Bandeira Visitante</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="Ex: 🇮🇹"
-                  value={awayFlag}
-                  onChange={(e) => setAwayFlag(e.target.value)}
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Data e Horário</label>
-              <input
-                type="datetime-local"
-                className="form-input"
-                value={scheduledAt}
-                onChange={(e) => setScheduledAt(e.target.value)}
-                required
-              />
-            </div>
-
-            <div className="grid-2" style={{ gap: 'var(--space-4)', marginBottom: '0' }}>
-              <div className="form-group">
-                <label className="form-label">Fase</label>
-                <select
-                  className="form-select"
-                  value={stage}
-                  onChange={(e) => setStage(e.target.value)}
-                >
-                  <option value="group_stage">Fase de Grupos</option>
-                  <option value="round_of_32">16 avos de Final</option>
-                  <option value="round_of_16">Oitavas de Final</option>
-                  <option value="quarterfinal">Quartas de Final</option>
-                  <option value="semifinal">Semifinal</option>
-                  <option value="final">Final</option>
-                </select>
-              </div>
-
-              {stage === 'group_stage' && (
-                <div className="form-group">
-                  <label className="form-label">Grupo (ex: Grupo A)</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="Ex: Grupo A"
-                    value={groupLabel}
-                    onChange={(e) => setGroupLabel(e.target.value)}
-                  />
-                </div>
-              )}
-            </div>
-
-            <button type="submit" className="btn btn-primary btn-block" disabled={actionLoading} style={{ marginTop: 'var(--space-4)' }}>
-              {actionLoading ? 'Salvando...' : 'Cadastrar Partida'}
-            </button>
-          </form>
-        </div>
-
+      <div style={{ maxWidth: '800px', margin: '0 auto' }}>
         {/* Gerenciar Partidas Existentes */}
         <div className="card">
           <h2 style={{ fontSize: 'var(--font-lg)', fontWeight: '700', marginBottom: 'var(--space-6)' }}>

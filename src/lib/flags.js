@@ -98,8 +98,30 @@ export const emojiToCountryCode = (emoji) => {
 }
 
 export const getFlagUrl = (emoji, teamName = '') => {
-  // Verificação robusta por nome do time caso o emoji falhe ou seja apenas uma bandeira preta genérica
   const lowerName = teamName.toLowerCase().trim()
+  
+  // Detecção de time placeholder (não confirmado)
+  const isPlaceholder = 
+    !emoji ||
+    emoji === '🏳️' || 
+    emoji === '🏳' || 
+    lowerName === '' || 
+    lowerName === 'tbd' ||
+    lowerName.includes('/') ||
+    (lowerName.length <= 4 && /\d/.test(lowerName)) ||
+    lowerName.includes('winner') ||
+    lowerName.includes('loser') ||
+    lowerName.includes('vencedor') ||
+    lowerName.includes('perdedor') ||
+    lowerName.includes('confronto') ||
+    lowerName.includes('jogo');
+
+  if (isPlaceholder) {
+    // Retorna um SVG de retângulo cinza fosco elegante inline
+    return `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="64" height="42" viewBox="0 0 64 42"><rect width="64" height="42" rx="4" fill="%231e293b" stroke="%23334155" stroke-width="1.5"/></svg>`
+  }
+
+  // Verificação robusta por nome do time caso o emoji falhe ou seja apenas uma bandeira preta genérica
   if (lowerName.includes('escócia') || lowerName.includes('scotland')) return 'https://flagcdn.com/w160/gb-sct.png'
   if (lowerName.includes('inglaterra') || lowerName.includes('england')) return 'https://flagcdn.com/w160/gb-eng.png'
   if (lowerName.includes('país de gales') || lowerName.includes('wales')) return 'https://flagcdn.com/w160/gb-wls.png'
@@ -111,6 +133,7 @@ export const getFlagUrl = (emoji, teamName = '') => {
   
   return `https://flagcdn.com/w160/${code}.png`
 }
+
 
 // Verifica se um jogo possui confrontos confirmados
 export const isMatchConfirmed = (match) => {

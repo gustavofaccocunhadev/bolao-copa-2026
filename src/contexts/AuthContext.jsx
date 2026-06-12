@@ -67,6 +67,18 @@ export function AuthProvider({ children }) {
       password,
       options: {
         data: { username },
+        emailRedirectTo: window.location.origin + '/dashboard',
+      },
+    })
+    if (error) throw error
+    return data
+  }
+
+  async function signInWithGoogle() {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin + '/dashboard',
       },
     })
     if (error) throw error
@@ -86,6 +98,7 @@ export function AuthProvider({ children }) {
     loading,
     signIn,
     signUp,
+    signInWithGoogle,
     signOut,
   }
 

@@ -132,6 +132,20 @@ export default function MatchDetail() {
     }
   }
 
+  const handleScoreChange = (team, operation) => {
+    if (team === 'home') {
+      let val = homeScoreInput === '' ? 0 : parseInt(homeScoreInput, 10)
+      if (operation === 'inc') val++
+      if (operation === 'dec') val = Math.max(0, val - 1)
+      setHomeScoreInput(val.toString())
+    } else {
+      let val = awayScoreInput === '' ? 0 : parseInt(awayScoreInput, 10)
+      if (operation === 'inc') val++
+      if (operation === 'dec') val = Math.max(0, val - 1)
+      setAwayScoreInput(val.toString())
+    }
+  }
+
   const handleSaveGuess = async (e) => {
     e.preventDefault()
     if (isLocked) {
@@ -139,8 +153,8 @@ export default function MatchDetail() {
       return
     }
 
-    const homeScore = parseInt(homeScoreInput, 10)
-    const awayScore = parseInt(awayScoreInput, 10)
+    const homeScore = homeScoreInput === '' ? 0 : parseInt(homeScoreInput, 10)
+    const awayScore = awayScoreInput === '' ? 0 : parseInt(awayScoreInput, 10)
 
     if (isNaN(homeScore) || isNaN(awayScore) || homeScore < 0 || awayScore < 0) {
       addToast('Por favor, digite placares válidos!', 'error')
@@ -291,43 +305,101 @@ export default function MatchDetail() {
             </div>
           ) : (
             <form onSubmit={handleSaveGuess}>
-              <div className="score-input-group" style={{ marginBottom: 'var(--space-6)' }}>
-                <div style={{ textAlign: 'center' }}>
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 'var(--space-6)', marginBottom: 'var(--space-6)', flexWrap: 'wrap' }}>
+                
+                {/* Mandante */}
+                <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                   <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-secondary)', marginBottom: 'var(--space-2)' }}>
                     {match.home_team}
                   </div>
-                  <input
-                    type="number"
-                    min="0"
-                    className="score-input"
-                    value={homeScoreInput}
-                    onChange={(e) => setHomeScoreInput(e.target.value)}
-                    disabled={isLocked || saving}
-                    required
-                  />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)' }}>
+                    <button
+                      type="button"
+                      className="btn-arrow"
+                      onClick={() => handleScoreChange('home', 'dec')}
+                      disabled={isLocked || saving}
+                    >
+                      ‹
+                    </button>
+                    <div className="score-box" style={{ width: '64px', height: '64px' }}>
+                      <input
+                        type="number"
+                        min="0"
+                        className="score-box-input"
+                        style={{ fontSize: '1.8rem' }}
+                        value={homeScoreInput}
+                        onChange={(e) => setHomeScoreInput(e.target.value)}
+                        disabled={isLocked || saving}
+                        required
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      className="btn-arrow"
+                      onClick={() => handleScoreChange('home', 'inc')}
+                      disabled={isLocked || saving}
+                    >
+                      ›
+                    </button>
+                  </div>
                 </div>
 
-                <div className="score-vs">x</div>
+                <div className="score-vs" style={{ fontSize: 'var(--font-xl)', color: 'var(--text-muted)', fontWeight: '800', marginTop: 'var(--space-4)' }}>X</div>
 
-                <div style={{ textAlign: 'center' }}>
+                {/* Visitante */}
+                <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                   <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-secondary)', marginBottom: 'var(--space-2)' }}>
                     {match.away_team}
                   </div>
-                  <input
-                    type="number"
-                    min="0"
-                    className="score-input"
-                    value={awayScoreInput}
-                    onChange={(e) => setAwayScoreInput(e.target.value)}
-                    disabled={isLocked || saving}
-                    required
-                  />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)' }}>
+                    <button
+                      type="button"
+                      className="btn-arrow"
+                      onClick={() => handleScoreChange('away', 'dec')}
+                      disabled={isLocked || saving}
+                    >
+                      ‹
+                    </button>
+                    <div className="score-box" style={{ width: '64px', height: '64px' }}>
+                      <input
+                        type="number"
+                        min="0"
+                        className="score-box-input"
+                        style={{ fontSize: '1.8rem' }}
+                        value={awayScoreInput}
+                        onChange={(e) => setAwayScoreInput(e.target.value)}
+                        disabled={isLocked || saving}
+                        required
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      className="btn-arrow"
+                      onClick={() => handleScoreChange('away', 'inc')}
+                      disabled={isLocked || saving}
+                    >
+                      ›
+                    </button>
+                  </div>
                 </div>
+
               </div>
 
               {!isLocked ? (
-                <button type="submit" className="btn btn-primary btn-block" disabled={saving}>
-                  {saving ? 'Salvando...' : 'Salvar Palpite'}
+                <button
+                  type="submit"
+                  className="btn btn-block"
+                  style={{
+                    background: myGuess ? 'var(--bg-secondary)' : '#0f2c59',
+                    borderColor: myGuess ? 'var(--border-color)' : '#1e3a8a',
+                    color: myGuess ? 'var(--text-secondary)' : '#93c5fd',
+                    fontWeight: '700',
+                    letterSpacing: '0.5px',
+                    textTransform: 'uppercase'
+                  }}
+                  disabled={saving}
+                >
+                  {saving ? 'Salvando...' : myGuess ? 'Atualizar Palpite' : 'Salvar Palpite'}
                 </button>
               ) : (
                 <div style={{ textAlign: 'center' }}>

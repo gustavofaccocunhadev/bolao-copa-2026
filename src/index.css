@@ -1186,3 +1186,119 @@ img { max-width: 100%; display: block; }
   .hero-emoji { font-size: 3.5rem; }
   .stat-card { flex-direction: column; text-align: center; }
 }
+
+/* Novos estilos para o seletor de placar interativo */
+.btn-arrow {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.8rem;
+  font-weight: 300;
+  cursor: pointer;
+  padding: 0 var(--space-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s, transform 0.1s;
+  user-select: none;
+  outline: none;
+}
+.btn-arrow:hover:not(:disabled) {
+  color: var(--accent-blue);
+  transform: scale(1.15);
+}
+.btn-arrow:active:not(:disabled) {
+  transform: scale(0.95);
+}
+.btn-arrow:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+
+.score-box {
+  width: 56px;
+  height: 56px;
+  background: rgba(6, 11, 19, 0.6); /* Fundo escuro semitransparente estilo vidro */
+  border: 1.5px solid var(--border-color); /* Borda elegante padrão */
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+}
+.score-box:focus-within {
+  border-color: var(--accent-blue);
+  background-color: #060b13;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+.score-box-input {
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-size: 1.6rem;
+  font-weight: 800;
+  text-align: center;
+  padding: 0;
+  margin: 0;
+  -moz-appearance: textfield; /* Remove setas no Firefox */
+}
+.score-box-input::-webkit-outer-spin-button,
+.score-box-input::-webkit-inner-spin-button {
+  -webkit-appearance: none; /* Remove setas no Chrome/Safari */
+  margin: 0;
+}
+
+/* Divider e botão do Google para autenticação */
+.auth-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  color: var(--text-muted);
+  margin: var(--space-4) 0;
+  font-size: var(--font-xs);
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.auth-divider:not(:empty)::before {
+  margin-right: var(--space-3);
+}
+
+.auth-divider:not(:empty)::after {
+  margin-left: var(--space-3);
+}
+
+.btn-google {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--font-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-family: var(--font-family);
+  margin-top: var(--space-3);
+}
+
+.btn-google:hover {
+  background: var(--border-color);
+  border-color: var(--text-secondary);
+}
+
+
