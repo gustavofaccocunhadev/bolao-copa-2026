@@ -144,34 +144,50 @@ export default function Matches() {
     setSavingId(matchId)
     try {
       const existingGuess = guesses[matchId]
-      const payload = {
-        user_id: user.id,
-        match_id: matchId,
-        group_id: null,
-        home_score: score.home === '' ? 0 : parseInt(score.home, 10),
-        away_score: score.away === '' ? 0 : parseInt(score.away, 10)
-      }
+      const homeScore = score.home === '' ? 0 : parseInt(score.home, 10)
+      const awayScore = score.away === '' ? 0 : parseInt(score.away, 10)
 
+      let result
       if (existingGuess) {
-        payload.id = existingGuess.id
+        // Se já existe, atualiza sem reinserir a coluna 'id'
+        const { data, error } = await supabase
+          .from('guesses')
+          .update({
+            home_score: homeScore,
+            away_score: awayScore
+          })
+          .eq('id', existingGuess.id)
+          .select()
+          .single()
+
+        if (error) throw error
+        result = data
+      } else {
+        // Se não existe, insere um novo registro (deixando o Postgres gerar o ID automaticamente)
+        const { data, error } = await supabase
+          .from('guesses')
+          .insert({
+            user_id: user.id,
+            match_id: matchId,
+            group_id: null,
+            home_score: homeScore,
+            away_score: awayScore
+          })
+          .select()
+          .single()
+
+        if (error) throw error
+        result = data
       }
-
-      const { data, error } = await supabase
-        .from('guesses')
-        .upsert(payload)
-        .select()
-        .single()
-
-      if (error) throw error
 
       setGuesses((prev) => ({
         ...prev,
-        [matchId]: data
+        [matchId]: result
       }))
       addToast('Palpite salvo com sucesso! ⚽', 'success')
     } catch (err) {
       console.error('Erro ao salvar palpite:', err)
-      addToast('Erro ao salvar: ' + err.message, 'error')
+      addToast('Erro ao salvar: ' + (err.message || 'Erro inesperado'), 'error')
     } finally {
       setSavingId(null)
     }

@@ -5,15 +5,36 @@ import { supabase } from '../lib/supabase'
 import { getFlagUrl } from '../lib/flags'
 
 export default function Profile() {
-  const { user, profile, refreshProfile } = useAuth()
+  const { user, profile, refreshProfile, signOut } = useAuth()
   const { addToast } = useToast()
 
   const [username, setUsername] = useState('')
   const [avatarUrl, setAvatarUrl] = useState('')
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [stats, setStats] = useState(null)
   const [history, setHistory] = useState([])
   const [loading, setLoading] = useState(true)
+
+  const handleDeleteAccount = async () => {
+    const confirm = window.confirm(
+      'Tem certeza absoluta de que deseja excluir sua conta permanentemente? \n\nEsta ação excluirá todos os seus palpites, grupos criados e pontuações e não poderá ser desfeita.'
+    )
+    if (!confirm) return
+
+    setDeleting(true)
+    try {
+      const { error } = await supabase.rpc('delete_user_account')
+      if (error) throw error
+
+      addToast('Sua conta e todos os seus dados foram excluídos com sucesso.', 'success')
+      await signOut()
+    } catch (err) {
+      console.error(err)
+      addToast('Erro ao excluir conta: ' + err.message, 'error')
+      setDeleting(false)
+    }
+  }
 
   useEffect(() => {
     if (profile) {
@@ -221,6 +242,30 @@ export default function Profile() {
                 <div className="stat-label">Posição</div>
               </div>
             </div>
+          </div>
+
+          {/* Excluir Conta */}
+          <div className="card" style={{ border: '1px solid rgba(255, 82, 82, 0.2)', background: 'rgba(255, 82, 82, 0.02)' }}>
+            <h3 style={{ fontSize: 'var(--font-md)', fontWeight: 700, color: 'var(--color-error)', marginBottom: 'var(--space-2)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+              ⚠️ Zona de Perigo
+            </h3>
+            <p style={{ fontSize: 'var(--font-xs)', color: 'var(--text-secondary)', marginBottom: 'var(--space-4)', lineHeight: '1.4' }}>
+              A exclusão da conta é permanente. Todos os seus palpites, grupos dos quais você é dono e suas participações serão completamente apagados do sistema e não poderão ser recuperados.
+            </p>
+            <button
+              type="button"
+              onClick={handleDeleteAccount}
+              className="btn btn-block"
+              style={{
+                background: 'linear-gradient(135deg, rgba(255, 82, 82, 0.15), rgba(211, 47, 47, 0.1))',
+                border: '1px solid rgba(255, 82, 82, 0.3)',
+                color: 'var(--color-error)',
+                fontWeight: '600'
+              }}
+              disabled={deleting}
+            >
+              {deleting ? 'Excluindo conta...' : 'Excluir Minha Conta'}
+            </button>
           </div>
         </div>
       </div>

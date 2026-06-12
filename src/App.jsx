@@ -17,6 +17,7 @@ import Groups from './pages/Groups'
 import GroupDetail from './pages/GroupDetail'
 import Profile from './pages/Profile'
 import Admin from './pages/Admin'
+import Rules from './pages/Rules'
 
 export default function App() {
   return (
@@ -39,6 +40,7 @@ export default function App() {
                 <Route path="/groups" element={<Groups />} />
                 <Route path="/groups/:id" element={<GroupDetail />} />
                 <Route path="/profile" element={<Profile />} />
+                <Route path="/rules" element={<Rules />} />
                 <Route path="/admin" element={<Admin />} />
               </Route>
             </Route>

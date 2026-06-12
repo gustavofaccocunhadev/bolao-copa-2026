@@ -32,6 +32,7 @@ export default function Layout() {
     { to: '/matches', icon: '⚽', label: 'Partidas' },
     { to: '/ranking', icon: '🏆', label: 'Ranking' },
     { to: '/groups', icon: '👥', label: 'Grupos' },
+    { to: '/rules', icon: '📋', label: 'Regras' },
     { to: '/profile', icon: '👤', label: 'Perfil' },
   ]
 

@@ -163,32 +163,45 @@ export default function MatchDetail() {
 
     setSaving(true)
     try {
-      const guessPayload = {
-        user_id: user.id,
-        match_id: match.id,
-        group_id: null, // Palpite global
-        home_score: homeScore,
-        away_score: awayScore
-      }
-
+      let result
       if (myGuess) {
-        guessPayload.id = myGuess.id
+        // Se já existe, atualiza sem reinserir a coluna 'id'
+        const { data, error } = await supabase
+          .from('guesses')
+          .update({
+            home_score: homeScore,
+            away_score: awayScore
+          })
+          .eq('id', myGuess.id)
+          .select()
+          .single()
+
+        if (error) throw error
+        result = data
+      } else {
+        // Se não existe, insere um novo registro (deixando o Postgres gerar o ID automaticamente)
+        const { data, error } = await supabase
+          .from('guesses')
+          .insert({
+            user_id: user.id,
+            match_id: match.id,
+            group_id: null, // Palpite global
+            home_score: homeScore,
+            away_score: awayScore
+          })
+          .select()
+          .single()
+
+        if (error) throw error
+        result = data
       }
 
-      const { data, error } = await supabase
-        .from('guesses')
-        .upsert(guessPayload)
-        .select()
-        .single()
-
-      if (error) throw error
-
-      setMyGuess(data)
+      setMyGuess(result)
       addToast('Palpite salvo com sucesso!', 'success')
       loadMatchDetails() // Recarrega para alinhar estados
     } catch (err) {
       console.error('Erro ao salvar palpite:', err)
-      addToast('Erro ao salvar palpite: ' + err.message, 'error')
+      addToast('Erro ao salvar palpite: ' + (err.message || 'Erro inesperado'), 'error')
     } finally {
       setSaving(false)
     }
