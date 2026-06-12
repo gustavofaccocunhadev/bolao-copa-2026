@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../contexts/AuthContext'
+import { useToast } from '../contexts/ToastContext'
 
 const STAGE_LABELS = {
   all: 'Todas',
@@ -14,54 +16,196 @@ const STAGE_LABELS = {
 
 const GROUP_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L']
 
+// Helper para converter emoji de bandeira para URL de imagem de bandeira real (Flagpedia)
+const emojiToCountryCode = (emoji) => {
+  if (!emoji) return 'un'
+  if (emoji === '🏴󠁧󠁢󠁥󠁮󠁧󠁿' || emoji === '🏴󠁧󠁢󠁥󠁮󠁧󠁿') return 'gb-eng'
+  if (emoji === '🏴󠁧󠁢󠁳󠁣󠁴󠁿' || emoji === '🏴󠁧󠁢󠁳󠁣󠁴󠁿') return 'gb-sct'
+  if (emoji === '🏴󠁧󠁢󠁷󠁬󠁳󠁿' || emoji === '🏴󠁧󠁢󠁷󠁬󠁳󠁿') return 'gb-wls'
+  
+  try {
+    const codePoints = Array.from(emoji).map(char => char.codePointAt(0))
+    const letters = codePoints
+      .filter(cp => cp >= 0x1F1E6 && cp <= 0x1F1FF)
+      .map(cp => String.fromCharCode(cp - 0x1F1E6 + 65))
+    return letters.join('').toLowerCase()
+  } catch (e) {
+    return 'un'
+  }
+}
+
+const getFlagUrl = (emoji) => {
+  const code = emojiToCountryCode(emoji)
+  if (code === 'gb-eng') return 'https://flagcdn.com/w160/gb-eng.png'
+  if (code === 'gb-sct') return 'https://flagcdn.com/w160/gb-sct.png'
+  if (code === 'gb-wls') return 'https://flagcdn.com/w160/gb-wls.png'
+  return `https://flagcdn.com/w160/${code}.png`
+}
+
 export default function Matches() {
+  const { user } = useAuth()
+  const { addToast } = useToast()
+
   const [matches, setMatches] = useState([])
+  const [guesses, setGuesses] = useState({}) // { [matchId]: guessObject }
+  const [tempScores, setTempScores] = useState({}) // { [matchId]: { home, away } }
+  
   const [loading, setLoading] = useState(true)
+  const [savingId, setSavingId] = useState(null)
+  
   const [stageFilter, setStageFilter] = useState('all')
   const [groupFilter, setGroupFilter] = useState('all')
+  
+  const [currentTime, setCurrentTime] = useState(new Date())
 
   useEffect(() => {
-    loadMatches()
-  }, [])
+    if (user) {
+      loadMatchesAndGuesses()
+    }
+    
+    // Atualiza o relógio do countdown a cada minuto
+    const interval = setInterval(() => {
+      setCurrentTime(new Date())
+    }, 60000)
+    
+    return () => clearInterval(interval)
+  }, [user])
 
-  const loadMatches = async () => {
+  const loadMatchesAndGuesses = async () => {
     setLoading(true)
     try {
-      const { data, error } = await supabase
+      // 1. Busca todas as partidas
+      const { data: matchesData, error: matchesError } = await supabase
         .from('matches')
         .select('*')
         .order('scheduled_at', { ascending: true })
 
-      if (error) throw error
-      setMatches(data || [])
+      if (matchesError) throw matchesError
+
+      // 2. Busca palpites globais do usuário
+      const { data: guessesData, error: guessesError } = await supabase
+        .from('guesses')
+        .select('*')
+        .eq('user_id', user.id)
+        .is('group_id', null)
+
+      if (guessesError) throw guessesError
+
+      const guessMap = {}
+      const scoresMap = {}
+      
+      guessesData?.forEach((g) => {
+        guessMap[g.match_id] = g
+        scoresMap[g.match_id] = { home: g.home_score, away: g.away_score }
+      })
+
+      // Inicializa placares temporários para partidas que não possuem palpite ainda como 0x0
+      matchesData?.forEach((m) => {
+        if (!scoresMap[m.id]) {
+          scoresMap[m.id] = { home: 0, away: 0 }
+        }
+      })
+
+      setMatches(matchesData || [])
+      setGuesses(guessMap)
+      setTempScores(scoresMap)
     } catch (err) {
-      console.error('Erro ao carregar partidas:', err)
+      console.error('Erro ao carregar dados:', err)
+      addToast('Erro ao carregar as partidas', 'error')
     } finally {
       setLoading(false)
     }
   }
 
-  const filtered = matches.filter((m) => {
-    if (stageFilter !== 'all' && m.stage !== stageFilter) return false
-    if (stageFilter === 'group_stage' && groupFilter !== 'all' && m.group_label !== `Grupo ${groupFilter}`) return false
-    return true
-  })
-
-  const formatDate = (dateStr) => {
-    return new Date(dateStr).toLocaleDateString('pt-BR', {
-      day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
+  const handleScoreChange = (matchId, team, operation) => {
+    setTempScores((prev) => {
+      const current = prev[matchId] || { home: 0, away: 0 }
+      let newVal = current[team]
+      
+      if (operation === 'inc') newVal++
+      if (operation === 'dec') newVal = Math.max(0, newVal - 1)
+      
+      return {
+        ...prev,
+        [matchId]: {
+          ...current,
+          [team]: newVal
+        }
+      }
     })
   }
 
+  const handleSaveGuess = async (matchId) => {
+    const score = tempScores[matchId]
+    if (!score) return
+
+    const isMatchLocked = isLocked(matches.find(m => m.id === matchId))
+    if (isMatchLocked) {
+      addToast('As apostas para esta partida já estão bloqueadas!', 'error')
+      return
+    }
+
+    setSavingId(matchId)
+    try {
+      const existingGuess = guesses[matchId]
+      const payload = {
+        user_id: user.id,
+        match_id: matchId,
+        group_id: null,
+        home_score: score.home,
+        away_score: score.away
+      }
+
+      if (existingGuess) {
+        payload.id = existingGuess.id
+      }
+
+      const { data, error } = await supabase
+        .from('guesses')
+        .upsert(payload)
+        .select()
+        .single()
+
+      if (error) throw error
+
+      setGuesses((prev) => ({
+        ...prev,
+        [matchId]: data
+      }))
+      addToast('Palpite salvo com sucesso! ⚽', 'success')
+    } catch (err) {
+      console.error('Erro ao salvar palpite:', err)
+      addToast('Erro ao salvar: ' + err.message, 'error')
+    } finally {
+      setSavingId(null)
+    }
+  }
+
+  const isLocked = (match) => {
+    if (!match) return true
+    if (match.status !== 'upcoming') return true
+    
+    // Bloqueia 10 minutos antes do jogo
+    const lockTime = new Date(new Date(match.scheduled_at).getTime() - 10 * 60 * 1000)
+    return currentTime >= lockTime
+  }
+
   const getCountdown = (dateStr) => {
-    const diff = new Date(dateStr) - new Date()
+    const diff = new Date(dateStr) - currentTime
     if (diff <= 0) return null
     const days = Math.floor(diff / 86400000)
     const hours = Math.floor((diff % 86400000) / 3600000)
     const minutes = Math.floor((diff % 3600000) / 60000)
-    if (days > 0) return `${days}d ${hours}h`
-    if (hours > 0) return `${hours}h ${minutes}min`
-    return `${minutes}min`
+    
+    if (days > 0) return `Falta ${days} ${days === 1 ? 'dia' : 'dias'}`
+    if (hours > 0) return `Faltam ${hours} ${hours === 1 ? 'hora' : 'horas'}`
+    return `Faltam ${minutes} min`
+  }
+
+  const formatDate = (dateStr) => {
+    return new Date(dateStr).toLocaleDateString('pt-BR', {
+      day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
+    }).replace('.', '')
   }
 
   const getStageBadge = (stage) => {
@@ -70,11 +214,11 @@ export default function Matches() {
     return 'badge-knockout'
   }
 
-  const getStatusBadge = (status) => {
-    if (status === 'upcoming') return { cls: 'status-upcoming', label: 'Aberta' }
-    if (status === 'locked') return { cls: 'status-locked', label: 'Bloqueada' }
-    return { cls: 'status-finished', label: 'Finalizada' }
-  }
+  const filtered = matches.filter((m) => {
+    if (stageFilter !== 'all' && m.stage !== stageFilter) return false
+    if (stageFilter === 'group_stage' && groupFilter !== 'all' && m.group_label !== `Grupo ${groupFilter}`) return false
+    return true
+  })
 
   if (loading) {
     return (
@@ -87,8 +231,8 @@ export default function Matches() {
   return (
     <div className="page-container">
       <div className="page-header">
-        <h1 className="page-title">Partidas</h1>
-        <p className="page-subtitle">Todas as partidas da Copa do Mundo 2026</p>
+        <h1 className="page-title">Palpitar ⚽</h1>
+        <p className="page-subtitle">Preencha seus palpites diretamente nos cards abaixo</p>
       </div>
 
       {/* Stage filter */}
@@ -106,7 +250,7 @@ export default function Matches() {
 
       {/* Group filter */}
       {stageFilter === 'group_stage' && (
-        <div className="filter-bar">
+        <div className="filter-bar" style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: 'var(--space-2)' }}>
           <button
             className={`filter-btn ${groupFilter === 'all' ? 'active' : ''}`}
             onClick={() => setGroupFilter('all')}
@@ -119,64 +263,185 @@ export default function Matches() {
               className={`filter-btn ${groupFilter === letter ? 'active' : ''}`}
               onClick={() => setGroupFilter(letter)}
             >
-              {letter}
+              Grupo {letter}
             </button>
           ))}
         </div>
       )}
 
-      {/* Matches grid */}
+      {/* Grid de Partidas */}
       {filtered.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-icon">&#x26BD;</div>
+        <div className="empty-state card">
+          <div className="empty-icon">⚽</div>
           <p className="empty-text">Nenhuma partida encontrada.</p>
         </div>
       ) : (
         <div className="grid-2">
           {filtered.map((match) => {
-            const status = getStatusBadge(match.status)
+            const locked = isLocked(match)
+            const hasGuess = !!guesses[match.id]
+            const score = tempScores[match.id] || { home: 0, away: 0 }
+            const countdown = getCountdown(match.scheduled_at)
+
             return (
-              <Link key={match.id} to={`/matches/${match.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                <div className="match-card">
-                  <div className="match-card-header">
-                    <span className={`match-stage-badge ${getStageBadge(match.stage)}`}>
-                      {match.group_label || STAGE_LABELS[match.stage] || match.stage}
+              <div key={match.id} className="match-card card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                
+                {/* Cabeçalho do Card */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)', fontSize: 'var(--font-xs)' }}>
+                  <span className={`match-stage-badge ${getStageBadge(match.stage)}`}>
+                    {match.group_label || STAGE_LABELS[match.stage] || match.stage}
+                  </span>
+                  
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>
+                      {formatDate(match.scheduled_at)}
                     </span>
-                    <span className="match-time">{formatDate(match.scheduled_at)}</span>
-                  </div>
-
-                  <div className="match-teams">
-                    <div className="match-team">
-                      <span className="team-flag">{match.home_flag}</span>
-                      <span className="team-name">{match.home_team}</span>
-                    </div>
-
-                    {match.status === 'finished' ? (
-                      <div className="match-score">
-                        <span>{match.home_score}</span>
-                        <span className="score-separator">&times;</span>
-                        <span>{match.away_score}</span>
-                      </div>
-                    ) : (
-                      <span className="score-vs">VS</span>
+                    {countdown && !locked && (
+                      <span className={`countdown ${new Date(match.scheduled_at) - currentTime < 3600000 ? 'countdown-urgent' : ''}`} style={{ fontSize: '10px', padding: '2px 8px' }}>
+                        ⏱️ {countdown}
+                      </span>
                     )}
-
-                    <div className="match-team">
-                      <span className="team-flag">{match.away_flag}</span>
-                      <span className="team-name">{match.away_team}</span>
-                    </div>
-                  </div>
-
-                  <div className="match-card-footer">
-                    <span className={`status-badge ${status.cls}`}>{status.label}</span>
-                    {match.status === 'upcoming' && getCountdown(match.scheduled_at) && (
-                      <span className={`countdown ${new Date(match.scheduled_at) - new Date() < 3600000 ? 'countdown-urgent' : ''}`}>
-                        &#x23F1; {getCountdown(match.scheduled_at)}
+                    {locked && (
+                      <span className="status-badge status-locked" style={{ fontSize: '10px', padding: '2px 8px' }}>
+                        🔒 Fechado
                       </span>
                     )}
                   </div>
                 </div>
-              </Link>
+
+                {/* Times, Bandeiras e Seletores */}
+                <div className="match-teams" style={{ margin: 'var(--space-4) 0', alignItems: 'flex-start' }}>
+                  
+                  {/* Mandante */}
+                  <div className="match-team" style={{ flex: 1 }}>
+                    <img 
+                      src={getFlagUrl(match.home_flag)} 
+                      alt="" 
+                      style={{ width: '64px', height: '42px', objectFit: 'cover', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)', boxShadow: 'var(--shadow-sm)', marginBottom: 'var(--space-2)' }} 
+                    />
+                    <span className="team-name" style={{ fontWeight: '600', fontSize: 'var(--font-sm)', width: '100%', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {match.home_team}
+                    </span>
+                    
+                    {!locked ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginTop: 'var(--space-3)' }}>
+                        <button 
+                          type="button" 
+                          className="btn btn-secondary btn-sm" 
+                          style={{ minWidth: '28px', padding: 'var(--space-1)' }}
+                          onClick={() => handleScoreChange(match.id, 'home', 'dec')}
+                          disabled={savingId === match.id}
+                        >
+                          ‹
+                        </button>
+                        <span style={{ fontSize: 'var(--font-lg)', fontWeight: '800', width: '20px', textAlign: 'center' }}>
+                          {score.home}
+                        </span>
+                        <button 
+                          type="button" 
+                          className="btn btn-secondary btn-sm" 
+                          style={{ minWidth: '28px', padding: 'var(--space-1)' }}
+                          onClick={() => handleScoreChange(match.id, 'home', 'inc')}
+                          disabled={savingId === match.id}
+                        >
+                          ›
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: 'var(--font-xl)', fontWeight: '800', marginTop: 'var(--space-3)' }}>
+                        {guesses[match.id] ? guesses[match.id].home_score : '-'}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* VS ou Placar Oficial */}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minWidth: '40px', alignSelf: 'center' }}>
+                    {match.status === 'finished' ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <span style={{ fontSize: 'var(--font-sm)', color: 'var(--text-muted)', fontWeight: '600' }}>OFICIAL</span>
+                        <div style={{ fontSize: 'var(--font-xl)', fontWeight: '900', color: 'var(--accent-green)' }}>
+                          {match.home_score} x {match.away_score}
+                        </div>
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: 'var(--font-lg)', fontWeight: '800', color: 'var(--text-muted)' }}>X</span>
+                    )}
+                  </div>
+
+                  {/* Visitante */}
+                  <div className="match-team" style={{ flex: 1 }}>
+                    <img 
+                      src={getFlagUrl(match.away_flag)} 
+                      alt="" 
+                      style={{ width: '64px', height: '42px', objectFit: 'cover', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)', boxShadow: 'var(--shadow-sm)', marginBottom: 'var(--space-2)' }} 
+                    />
+                    <span className="team-name" style={{ fontWeight: '600', fontSize: 'var(--font-sm)', width: '100%', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {match.away_team}
+                    </span>
+                    
+                    {!locked ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginTop: 'var(--space-3)' }}>
+                        <button 
+                          type="button" 
+                          className="btn btn-secondary btn-sm" 
+                          style={{ minWidth: '28px', padding: 'var(--space-1)' }}
+                          onClick={() => handleScoreChange(match.id, 'away', 'dec')}
+                          disabled={savingId === match.id}
+                        >
+                          ‹
+                        </button>
+                        <span style={{ fontSize: 'var(--font-lg)', fontWeight: '800', width: '20px', textAlign: 'center' }}>
+                          {score.away}
+                        </span>
+                        <button 
+                          type="button" 
+                          className="btn btn-secondary btn-sm" 
+                          style={{ minWidth: '28px', padding: 'var(--space-1)' }}
+                          onClick={() => handleScoreChange(match.id, 'away', 'inc')}
+                          disabled={savingId === match.id}
+                        >
+                          ›
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: 'var(--font-xl)', fontWeight: '800', marginTop: 'var(--space-3)' }}>
+                        {guesses[match.id] ? guesses[match.id].away_score : '-'}
+                      </div>
+                    )}
+                  </div>
+
+                </div>
+
+                {/* Ações / Rodapé do Card */}
+                <div style={{ marginTop: 'var(--space-4)', paddingTop: 'var(--space-4)', borderTop: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                  {!locked ? (
+                    <button
+                      type="button"
+                      className={`btn btn-block ${hasGuess ? 'btn-secondary' : 'btn-primary'}`}
+                      onClick={() => handleSaveGuess(match.id)}
+                      disabled={savingId === match.id}
+                      style={{ fontSize: 'var(--font-xs)', textTransform: 'uppercase', letterSpacing: '0.5px' }}
+                    >
+                      {savingId === match.id ? 'Salvando...' : hasGuess ? 'Atualizar Palpite' : 'Salvar Palpite'}
+                    </button>
+                  ) : (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                      {match.status === 'finished' && guesses[match.id] ? (
+                        <div style={{ display: 'inline-flex', padding: '2px 8px', borderRadius: 'var(--radius-full)', fontSize: 'var(--font-xs)', fontWeight: '700' }} className={guesses[match.id].points === 10 ? 'points-10' : guesses[match.id].points === 5 ? 'points-5' : guesses[match.id].points === 3 ? 'points-3' : 'points-0'}>
+                          {guesses[match.id].points === 10 ? '⭐ +10 pts' : `+${guesses[match.id].points} pts`}
+                        </div>
+                      ) : (
+                        <div />
+                      )}
+                      
+                      <Link to={`/matches/${match.id}`} className="btn btn-sm btn-outline">
+                        Ver Outros Palpites →
+                      </Link>
+                    </div>
+                  )}
+                </div>
+
+              </div>
             )
           })}
         </div>

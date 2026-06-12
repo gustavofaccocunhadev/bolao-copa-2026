@@ -2,25 +2,66 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
+import { useToast } from '../contexts/ToastContext'
+
+// Helper para converter emoji de bandeira para URL de imagem de bandeira real (Flagpedia)
+const emojiToCountryCode = (emoji) => {
+  if (!emoji) return 'un'
+  if (emoji === '🏴\u200d󠁥󠁮󠁟' || emoji === '🏴󠁧󠁢󠁥󠁮󠁧󠁿') return 'gb-eng'
+  if (emoji === '🏴\u200d󠁳󠁣󠁴󠁟' || emoji === '🏴󠁧󠁢󠁳󠁣󠁴󠁿') return 'gb-sct'
+  if (emoji === '🏴\u200d󠁷󠁬󠁳󠁟' || emoji === '🏴󠁧󠁢󠁷󠁬󠁳󠁿') return 'gb-wls'
+  
+  try {
+    const codePoints = Array.from(emoji).map(char => char.codePointAt(0))
+    const letters = codePoints
+      .filter(cp => cp >= 0x1F1E6 && cp <= 0x1F1FF)
+      .map(cp => String.fromCharCode(cp - 0x1F1E6 + 65))
+    return letters.join('').toLowerCase()
+  } catch (e) {
+    return 'un'
+  }
+}
+
+const getFlagUrl = (emoji) => {
+  const code = emojiToCountryCode(emoji)
+  if (code === 'gb-eng') return 'https://flagcdn.com/w160/gb-eng.png'
+  if (code === 'gb-sct') return 'https://flagcdn.com/w160/gb-sct.png'
+  if (code === 'gb-wls') return 'https://flagcdn.com/w160/gb-wls.png'
+  return `https://flagcdn.com/w160/${code}.png`
+}
 
 export default function Dashboard() {
   const { user, profile } = useAuth()
+  const { addToast } = useToast()
 
   const [stats, setStats] = useState({ points: 0, guesses: 0, rank: '-' })
   const [upcoming, setUpcoming] = useState([])
   const [results, setResults] = useState([])
   const [topRanking, setTopRanking] = useState([])
   const [loading, setLoading] = useState(true)
+  
+  // Controle de palpites locais nas próximas partidas
+  const [guesses, setGuesses] = useState({}) // { [matchId]: guessObject }
+  const [tempScores, setTempScores] = useState({}) // { [matchId]: { home, away } }
+  const [savingId, setSavingId] = useState(null)
+  
+  const [currentTime, setCurrentTime] = useState(new Date())
 
   useEffect(() => {
     if (!user) return
     loadDashboard()
+    
+    const interval = setInterval(() => {
+      setCurrentTime(new Date())
+    }, 60000)
+    
+    return () => clearInterval(interval)
   }, [user])
 
   const loadDashboard = async () => {
     setLoading(true)
     try {
-      // Global ranking (for stats + top 10)
+      // 1. Busca ranking global completo
       const { data: rankData } = await supabase
         .from('global_ranking')
         .select('*')
@@ -31,7 +72,7 @@ export default function Dashboard() {
 
       setTopRanking(allRanked.slice(0, 10))
 
-      // Guess count
+      // 2. Contador de palpites totais
       const { count: guessCount } = await supabase
         .from('guesses')
         .select('*', { count: 'exact', head: true })
@@ -43,7 +84,7 @@ export default function Dashboard() {
         rank: myIndex >= 0 ? myIndex + 1 : '-'
       })
 
-      // Next 5 upcoming matches
+      // 3. Próximas 5 partidas
       const { data: upcomingData } = await supabase
         .from('matches')
         .select('*')
@@ -53,7 +94,7 @@ export default function Dashboard() {
 
       setUpcoming(upcomingData || [])
 
-      // Last 5 finished matches + user's guesses
+      // 4. Últimos 5 resultados finalizados
       const { data: finishedData } = await supabase
         .from('matches')
         .select('*')
@@ -61,8 +102,16 @@ export default function Dashboard() {
         .order('scheduled_at', { ascending: false })
         .limit(5)
 
-      if (finishedData && finishedData.length > 0) {
-        const matchIds = finishedData.map((m) => m.id)
+      // 5. Busca palpites do usuário para associar às partidas
+      const matchIds = [
+        ...(upcomingData || []).map((m) => m.id),
+        ...(finishedData || []).map((m) => m.id)
+      ]
+
+      const guessMap = {}
+      const scoresMap = {}
+
+      if (matchIds.length > 0) {
         const { data: guessData } = await supabase
           .from('guesses')
           .select('*')
@@ -70,40 +119,131 @@ export default function Dashboard() {
           .is('group_id', null)
           .in('match_id', matchIds)
 
-        const guessMap = {}
-        if (guessData) {
-          guessData.forEach((g) => { guessMap[g.match_id] = g })
-        }
-
-        setResults(finishedData.map((m) => ({
-          ...m,
-          myGuess: guessMap[m.id] || null
-        })))
-      } else {
-        setResults([])
+        guessData?.forEach((g) => {
+          guessMap[g.match_id] = g
+          scoresMap[g.match_id] = { home: g.home_score, away: g.away_score }
+        })
       }
+
+      // Inicializa estados locais para os seletores nas próximas partidas
+      upcomingData?.forEach((m) => {
+        if (!scoresMap[m.id]) {
+          scoresMap[m.id] = { home: 0, away: 0 }
+        }
+      })
+
+      setGuesses(guessMap)
+      setTempScores(scoresMap)
+
+      setResults((finishedData || []).map((m) => ({
+        ...m,
+        myGuess: guessMap[m.id] || null
+      })))
+
     } catch (err) {
       console.error('Erro ao carregar dashboard:', err)
+      addToast('Erro ao carregar dados do dashboard', 'error')
     } finally {
       setLoading(false)
     }
   }
 
-  const formatDate = (dateStr) => {
-    return new Date(dateStr).toLocaleDateString('pt-BR', {
-      day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
+  const handleScoreChange = (matchId, team, operation) => {
+    setTempScores((prev) => {
+      const current = prev[matchId] || { home: 0, away: 0 }
+      let newVal = current[team]
+      
+      if (operation === 'inc') newVal++
+      if (operation === 'dec') newVal = Math.max(0, newVal - 1)
+      
+      return {
+        ...prev,
+        [matchId]: {
+          ...current,
+          [team]: newVal
+        }
+      }
     })
   }
 
+  const handleSaveGuess = async (matchId) => {
+    const score = tempScores[matchId]
+    if (!score) return
+
+    const isMatchLocked = isLocked(upcoming.find(m => m.id === matchId))
+    if (isMatchLocked) {
+      addToast('As apostas para esta partida já estão bloqueadas!', 'error')
+      return
+    }
+
+    setSavingId(matchId)
+    try {
+      const existingGuess = guesses[matchId]
+      const payload = {
+        user_id: user.id,
+        match_id: matchId,
+        group_id: null,
+        home_score: score.home,
+        away_score: score.away
+      }
+
+      if (existingGuess) {
+        payload.id = existingGuess.id
+      }
+
+      const { data, error } = await supabase
+        .from('guesses')
+        .upsert(payload)
+        .select()
+        .single()
+
+      if (error) throw error
+
+      setGuesses((prev) => ({
+        ...prev,
+        [matchId]: data
+      }))
+      addToast('Palpite salvo com sucesso! ⚽', 'success')
+      
+      // Recarrega estatísticas para atualizar palpites feitos
+      const { count: guessCount } = await supabase
+        .from('guesses')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+
+      setStats(prev => ({ ...prev, guesses: guessCount || 0 }))
+    } catch (err) {
+      console.error('Erro ao salvar palpite:', err)
+      addToast('Erro ao salvar: ' + err.message, 'error')
+    } finally {
+      setSavingId(null)
+    }
+  }
+
+  const isLocked = (match) => {
+    if (!match) return true
+    if (match.status !== 'upcoming') return true
+    
+    const lockTime = new Date(new Date(match.scheduled_at).getTime() - 10 * 60 * 1000)
+    return currentTime >= lockTime
+  }
+
   const getCountdown = (dateStr) => {
-    const diff = new Date(dateStr) - new Date()
+    const diff = new Date(dateStr) - currentTime
     if (diff <= 0) return null
     const days = Math.floor(diff / 86400000)
     const hours = Math.floor((diff % 86400000) / 3600000)
     const minutes = Math.floor((diff % 3600000) / 60000)
+    
     if (days > 0) return `${days}d ${hours}h`
-    if (hours > 0) return `${hours}h ${minutes}min`
-    return `${minutes}min`
+    if (hours > 0) return `${hours}h ${minutes}m`
+    return `${minutes}m`
+  }
+
+  const formatDate = (dateStr) => {
+    return new Date(dateStr).toLocaleDateString('pt-BR', {
+      day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
+    }).replace('.', '')
   }
 
   const getPointsClass = (pts) => {
@@ -138,137 +278,245 @@ export default function Dashboard() {
       {/* Welcome */}
       <div className="dashboard-welcome">
         <h1 className="welcome-text">
-          Ol&aacute;, {profile?.username || 'Jogador'}! &#x1F44B;
+          Olá, {profile?.username || 'Jogador'}! 👋
         </h1>
         <p style={{ color: 'var(--text-secondary)', marginTop: 'var(--space-2)' }}>
-          Bem-vindo ao Bol&atilde;o Copa 2026
+          Bem-vindo ao Bolão Copa 2026
         </p>
       </div>
 
       {/* Stats */}
       <div className="grid-3" style={{ marginBottom: 'var(--space-8)' }}>
         <div className="stat-card">
-          <div className="stat-icon stat-icon-green">&#x1F3C6;</div>
+          <div className="stat-icon stat-icon-green">🏆</div>
           <div>
             <div className="stat-value">{stats.points}</div>
             <div className="stat-label">Total de Pontos</div>
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon stat-icon-blue">&#x1F3AF;</div>
+          <div className="stat-icon stat-icon-blue">🎯</div>
           <div>
             <div className="stat-value">{stats.guesses}</div>
             <div className="stat-label">Palpites Feitos</div>
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon stat-icon-yellow">&#x1F4CA;</div>
+          <div className="stat-icon stat-icon-yellow">📊</div>
           <div>
             <div className="stat-value">#{stats.rank}</div>
-            <div className="stat-label">Posi&ccedil;&atilde;o no Ranking</div>
+            <div className="stat-label">Posição no Ranking</div>
           </div>
         </div>
       </div>
 
-      {/* Upcoming Matches */}
+      {/* Próximas Partidas com Palpites Diretos */}
       <div style={{ marginBottom: 'var(--space-8)' }}>
         <div className="section-header">
-          <h2 className="section-title">Pr&oacute;ximas Partidas</h2>
+          <h2 className="section-title">Próximas Partidas</h2>
           <Link to="/matches" className="section-link">Ver todas &rarr;</Link>
         </div>
 
         {upcoming.length === 0 ? (
-          <div className="empty-state" style={{ padding: 'var(--space-8)' }}>
-            <div className="empty-icon">&#x1F4C5;</div>
+          <div className="empty-state card">
+            <div className="empty-icon">📅</div>
             <p className="empty-text">Nenhuma partida agendada.</p>
           </div>
         ) : (
           <div className="grid-2">
-            {upcoming.map((match) => (
-              <Link key={match.id} to={`/matches/${match.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                <div className="match-card">
-                  <div className="match-card-header">
-                    <span className={`match-stage-badge ${match.stage === 'group_stage' ? 'badge-group' : match.stage === 'final' ? 'badge-final' : 'badge-knockout'}`}>
-                      {match.group_label || match.stage.replace(/_/g, ' ')}
+            {upcoming.map((match) => {
+              const locked = isLocked(match)
+              const hasGuess = !!guesses[match.id]
+              const score = tempScores[match.id] || { home: 0, away: 0 }
+              const countdown = getCountdown(match.scheduled_at)
+
+              return (
+                <div key={match.id} className="match-card card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  
+                  {/* Cabeçalho do card */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)', fontSize: 'var(--font-xs)' }}>
+                    <span className="match-stage-badge badge-group">
+                      {match.group_label || match.stage}
                     </span>
-                    <span className="match-time">{formatDate(match.scheduled_at)}</span>
-                  </div>
-                  <div className="match-teams">
-                    <div className="match-team">
-                      <span className="team-flag">{match.home_flag}</span>
-                      <span className="team-name">{match.home_team}</span>
-                    </div>
-                    <span className="score-vs">VS</span>
-                    <div className="match-team">
-                      <span className="team-flag">{match.away_flag}</span>
-                      <span className="team-name">{match.away_team}</span>
-                    </div>
-                  </div>
-                  <div className="match-card-footer">
-                    <span className="status-badge status-upcoming">Aberta</span>
-                    {getCountdown(match.scheduled_at) && (
-                      <span className={`countdown ${new Date(match.scheduled_at) - new Date() < 3600000 ? 'countdown-urgent' : ''}`}>
-                        &#x23F1; {getCountdown(match.scheduled_at)}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>
+                        {formatDate(match.scheduled_at)}
                       </span>
+                      {countdown && (
+                        <span className={`countdown ${new Date(match.scheduled_at) - currentTime < 3600000 ? 'countdown-urgent' : ''}`} style={{ fontSize: '10px', padding: '2px 8px' }}>
+                          ⏱️ {countdown}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Times, Bandeiras e Placar */}
+                  <div className="match-teams" style={{ margin: 'var(--space-4) 0', alignItems: 'flex-start' }}>
+                    
+                    {/* Mandante */}
+                    <div className="match-team" style={{ flex: 1 }}>
+                      <img 
+                        src={getFlagUrl(match.home_flag)} 
+                        alt="" 
+                        style={{ width: '56px', height: '37px', objectFit: 'cover', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)', marginBottom: 'var(--space-2)' }} 
+                      />
+                      <span className="team-name" style={{ fontSize: 'var(--font-xs)', fontWeight: '600' }}>
+                        {match.home_team}
+                      </span>
+                      
+                      {!locked ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
+                          <button 
+                            type="button" 
+                            className="btn btn-secondary btn-sm"
+                            style={{ minWidth: '24px', padding: '0px 4px' }}
+                            onClick={() => handleScoreChange(match.id, 'home', 'dec')}
+                          >
+                            ‹
+                          </button>
+                          <span style={{ fontWeight: '800', fontSize: 'var(--font-base)', width: '16px', textAlign: 'center' }}>
+                            {score.home}
+                          </span>
+                          <button 
+                            type="button" 
+                            className="btn btn-secondary btn-sm"
+                            style={{ minWidth: '24px', padding: '0px 4px' }}
+                            onClick={() => handleScoreChange(match.id, 'home', 'inc')}
+                          >
+                            ›
+                          </button>
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: 'var(--font-lg)', fontWeight: '800', marginTop: 'var(--space-2)' }}>
+                          {guesses[match.id] ? guesses[match.id].home_score : '-'}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Divisor */}
+                    <span style={{ fontSize: 'var(--font-base)', fontWeight: '800', color: 'var(--text-muted)', alignSelf: 'center' }}>X</span>
+
+                    {/* Visitante */}
+                    <div className="match-team" style={{ flex: 1 }}>
+                      <img 
+                        src={getFlagUrl(match.away_flag)} 
+                        alt="" 
+                        style={{ width: '56px', height: '37px', objectFit: 'cover', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)', marginBottom: 'var(--space-2)' }} 
+                      />
+                      <span className="team-name" style={{ fontSize: 'var(--font-xs)', fontWeight: '600' }}>
+                        {match.away_team}
+                      </span>
+                      
+                      {!locked ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
+                          <button 
+                            type="button" 
+                            className="btn btn-secondary btn-sm"
+                            style={{ minWidth: '24px', padding: '0px 4px' }}
+                            onClick={() => handleScoreChange(match.id, 'away', 'dec')}
+                          >
+                            ‹
+                          </button>
+                          <span style={{ fontWeight: '800', fontSize: 'var(--font-base)', width: '16px', textAlign: 'center' }}>
+                            {score.away}
+                          </span>
+                          <button 
+                            type="button" 
+                            className="btn btn-secondary btn-sm"
+                            style={{ minWidth: '24px', padding: '0px 4px' }}
+                            onClick={() => handleScoreChange(match.id, 'away', 'inc')}
+                          >
+                            ›
+                          </button>
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: 'var(--font-lg)', fontWeight: '800', marginTop: 'var(--space-2)' }}>
+                          {guesses[match.id] ? guesses[match.id].away_score : '-'}
+                        </div>
+                      )}
+                    </div>
+
+                  </div>
+
+                  {/* Salvar Palpite */}
+                  <div style={{ marginTop: 'var(--space-3)', paddingTop: 'var(--space-3)', borderTop: '1px solid var(--border-color)' }}>
+                    {!locked ? (
+                      <button
+                        type="button"
+                        className={`btn btn-block btn-sm ${hasGuess ? 'btn-secondary' : 'btn-primary'}`}
+                        onClick={() => handleSaveGuess(match.id)}
+                        disabled={savingId === match.id}
+                      >
+                        {savingId === match.id ? 'Salvando...' : hasGuess ? 'Atualizar Palpite' : 'Salvar Palpite'}
+                      </button>
+                    ) : (
+                      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                        <Link to={`/matches/${match.id}`} className="btn btn-sm btn-outline">
+                          Ver Outros Palpites →
+                        </Link>
+                      </div>
                     )}
                   </div>
+
                 </div>
-              </Link>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
 
-      {/* Last Results */}
+      {/* Últimos Resultados */}
       <div style={{ marginBottom: 'var(--space-8)' }}>
         <div className="section-header">
-          <h2 className="section-title">&Uacute;ltimos Resultados</h2>
+          <h2 className="section-title">Últimos Resultados</h2>
           <Link to="/matches" className="section-link">Ver todos &rarr;</Link>
         </div>
 
         {results.length === 0 ? (
-          <div className="empty-state" style={{ padding: 'var(--space-8)' }}>
-            <div className="empty-icon">&#x26BD;</div>
-            <p className="empty-text">Nenhum resultado dispon&iacute;vel.</p>
+          <div className="empty-state card">
+            <div className="empty-icon">⚽</div>
+            <p className="empty-text">Nenhum resultado disponível.</p>
           </div>
         ) : (
           <div className="grid-2">
             {results.map((match) => (
-              <Link key={match.id} to={`/matches/${match.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                <div className="match-card">
-                  <div className="match-card-header">
-                    <span className={`match-stage-badge ${match.stage === 'group_stage' ? 'badge-group' : match.stage === 'final' ? 'badge-final' : 'badge-knockout'}`}>
-                      {match.group_label || match.stage.replace(/_/g, ' ')}
-                    </span>
-                    <span className="status-badge status-finished">Finalizada</span>
-                  </div>
-                  <div className="match-teams">
-                    <div className="match-team">
-                      <span className="team-flag">{match.home_flag}</span>
-                      <span className="team-name">{match.home_team}</span>
-                    </div>
-                    <div className="match-score">
-                      <span>{match.home_score}</span>
-                      <span className="score-separator">&times;</span>
-                      <span>{match.away_score}</span>
-                    </div>
-                    <div className="match-team">
-                      <span className="team-flag">{match.away_flag}</span>
-                      <span className="team-name">{match.away_team}</span>
-                    </div>
-                  </div>
-                  {match.myGuess && (
-                    <div className="match-card-footer">
-                      <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>
-                        Seu palpite: <strong style={{ color: 'var(--text-primary)' }}>{match.myGuess.home_score} &times; {match.myGuess.away_score}</strong>
-                      </span>
-                      <span className={`guess-points ${getPointsClass(match.myGuess.points)}`}>
-                        {match.myGuess.points} pts
-                      </span>
-                    </div>
-                  )}
+              <div key={match.id} className="match-card card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div className="match-card-header">
+                  <span className="match-stage-badge badge-knockout">
+                    {match.group_label || match.stage}
+                  </span>
+                  <span className="status-badge status-finished">Finalizada</span>
                 </div>
-              </Link>
+                
+                <div className="match-teams" style={{ margin: 'var(--space-4) 0' }}>
+                  <div className="match-team">
+                    <img src={getFlagUrl(match.home_flag)} alt="" style={{ width: '48px', height: '32px', objectFit: 'cover', borderRadius: 'var(--radius-sm)', marginBottom: 'var(--space-1)' }} />
+                    <span className="team-name" style={{ fontSize: 'var(--font-xs)' }}>{match.home_team}</span>
+                  </div>
+                  
+                  <div className="match-score">
+                    <span>{match.home_score}</span>
+                    <span className="score-separator">&times;</span>
+                    <span>{match.away_score}</span>
+                  </div>
+                  
+                  <div className="match-team">
+                    <img src={getFlagUrl(match.away_flag)} alt="" style={{ width: '48px', height: '32px', objectFit: 'cover', borderRadius: 'var(--radius-sm)', marginBottom: 'var(--space-1)' }} />
+                    <span className="team-name" style={{ fontSize: 'var(--font-xs)' }}>{match.away_team}</span>
+                  </div>
+                </div>
+                
+                {match.myGuess && (
+                  <div className="match-card-footer" style={{ padding: '0', border: '0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-secondary)' }}>
+                      Seu palpite: <strong style={{ color: 'var(--text-primary)' }}>{match.myGuess.home_score} &times; {match.myGuess.away_score}</strong>
+                    </span>
+                    <span className={`guess-points ${getPointsClass(match.myGuess.points)}`} style={{ fontSize: '10px', padding: '2px 8px' }}>
+                      +{match.myGuess.points} pts
+                    </span>
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         )}
@@ -282,9 +530,9 @@ export default function Dashboard() {
         </div>
 
         {topRanking.length === 0 ? (
-          <div className="empty-state" style={{ padding: 'var(--space-8)' }}>
-            <div className="empty-icon">&#x1F3C6;</div>
-            <p className="empty-text">Ranking ainda n&atilde;o dispon&iacute;vel.</p>
+          <div className="empty-state card">
+            <div className="empty-icon">🏆</div>
+            <p className="empty-text">Ranking ainda não disponível.</p>
           </div>
         ) : (
           <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -293,28 +541,34 @@ export default function Dashboard() {
                 <tr>
                   <th>#</th>
                   <th>Jogador</th>
-                  <th>Pontos</th>
+                  <th style={{ textAlign: 'center' }}>Pontos</th>
                 </tr>
               </thead>
               <tbody>
                 {topRanking.map((r, i) => (
                   <tr
                     key={r.user_id}
-                    style={r.user_id === user.id ? { background: 'var(--accent-green-glow)' } : {}}
+                    style={r.user_id === user.id ? { background: 'rgba(0, 230, 118, 0.04)' } : {}}
                   >
                     <td className={`rank-position ${getRankClass(i)}`}>
-                      {i < 3 ? ['\u{1F947}', '\u{1F948}', '\u{1F949}'][i] : i + 1}
+                      {i < 3 ? ['🥇', '🥈', '🥉'][i] : i + 1}
                     </td>
                     <td>
                       <div className="rank-user">
-                        <div className="rank-avatar">{getInitials(r.username)}</div>
-                        <span style={{ fontWeight: r.user_id === user.id ? 700 : 400 }}>
+                        <div className="rank-avatar" style={{ width: '28px', height: '28px', fontSize: '10px' }}>
+                          {r.avatar_url ? (
+                            <img src={r.avatar_url} alt="" style={{ width: '100%', height: '100%', borderRadius: '50%' }} />
+                          ) : (
+                            getInitials(r.username)
+                          )}
+                        </div>
+                        <span style={{ fontWeight: r.user_id === user.id ? 700 : 500 }}>
                           {r.username}
-                          {r.user_id === user.id && ' (voc\u00EA)'}
+                          {r.user_id === user.id && ' (Você)'}
                         </span>
                       </div>
                     </td>
-                    <td className="rank-points">{r.total_points}</td>
+                    <td className="rank-points" style={{ textAlign: 'center' }}>{r.total_points}</td>
                   </tr>
                 ))}
               </tbody>
