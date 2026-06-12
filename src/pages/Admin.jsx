@@ -148,17 +148,54 @@ export default function Admin() {
 
   const handleSyncOpenFootball = async () => {
     setActionLoading(true)
-    addToast('Iniciando sincronização com OpenFootball...', 'info')
+    addToast('Iniciando sincronização de jogos e placares...', 'info')
+    
+    const API_URL = "https://worldcup26.ir"
+    const email = "bolao_sincronizador@bolao.com"
+    const password = "SyncSecurePassword123!"
+    
     try {
-      const res = await fetch("https://raw.githubusercontent.com/openfootball/worldcup.json/master/2026/worldcup.json")
-      if (!res.ok) throw new Error("Erro ao baixar dados do GitHub")
-      const json = await res.json()
+      // 1. Autenticar na API
+      let authRes = await fetch(`${API_URL}/auth/authenticate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password })
+      })
       
-      if (!json.matches || json.matches.length === 0) {
-        throw new Error("Nenhum jogo encontrado no JSON")
+      let authData = await authRes.json()
+      let token = null
+      
+      if (authData.error && (authData.error === "User not found" || (authData.error.message && authData.error.message.includes("not found")))) {
+        // Se usuário não existir no servidor de API deles, cria conta
+        let regRes = await fetch(`${API_URL}/auth/register`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: "Bolao Sync Engine", email, password })
+        })
+        let regData = await regRes.json()
+        token = regData.token
+      } else {
+        token = authData.token
       }
 
-      // Carrega partidas atuais do banco
+      if (!token) {
+        throw new Error("Não foi possível obter autenticação no servidor de jogos.")
+      }
+
+      // 2. Buscar jogos da API
+      let gamesRes = await fetch(`${API_URL}/get/games`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      })
+      if (!gamesRes.ok) throw new Error("Erro ao carregar jogos da API")
+      
+      let gamesData = await gamesRes.json()
+      const games = gamesData.data || gamesData.games || gamesData
+      
+      if (!Array.isArray(games)) {
+        throw new Error("Dados de jogos inválidos recebidos")
+      }
+
+      // 3. Carregar jogos do banco de dados local (Supabase)
       const { data: dbMatches, error: dbError } = await supabase
         .from('matches')
         .select('*')
@@ -166,56 +203,121 @@ export default function Admin() {
         
       if (dbError) throw dbError
 
-      let updatedCount = 0;
-      let finalizedCount = 0;
+      // Função interna de tradução de labels indefinidos
+      const translateLabel = (label) => {
+        if (!label) return null
+        let translated = label.trim()
+        translated = translated.replace(/Runner-up/gi, "2º colocado")
+        translated = translated.replace(/Winner/gi, "Vencedor")
+        translated = translated.replace(/Loser/gi, "Perdedor")
+        translated = translated.replace(/3rd/gi, "3º colocado")
+        translated = translated.replace(/Group/gi, "Grupo")
+        translated = translated.replace(/Match/gi, "Jogo")
+        
+        translated = translated.replace(/Vencedor Grupo/gi, "Vencedor do Grupo")
+        translated = translated.replace(/2º colocado Grupo/gi, "2º do Grupo")
+        translated = translated.replace(/3º colocado Grupo/gi, "3º do Grupo")
+        translated = translated.replace(/Vencedor Jogo/gi, "Vencedor do Jogo")
+        translated = translated.replace(/Perdedor Jogo/gi, "Perdedor do Jogo")
+        return translated
+      }
 
-      for (let i = 0; i < json.matches.length; i++) {
-        const jsonMatch = json.matches[i]
-        const dbMatch = dbMatches[i]
+      let updatedCount = 0
+      let finalizedCount = 0
+
+      for (let i = 0; i < games.length; i++) {
+        const jsonMatch = games[i]
+        const matchId = parseInt(jsonMatch.id, 10)
+        const dbMatch = dbMatches.find(m => m.id === matchId)
         
         if (!dbMatch) continue
 
-        const homeInfo = translateCountryName(jsonMatch.team1)
-        const awayInfo = translateCountryName(jsonMatch.team2)
-        
-        // Verifica se o jogo no banco precisa de atualização de times
-        const needsUpdate = dbMatch.home_team !== homeInfo.name || dbMatch.away_team !== awayInfo.name
+        // Determina nomes dos times e bandeiras
+        let homeTeamName = dbMatch.home_team
+        let homeFlagImg = dbMatch.home_flag
+        let awayTeamName = dbMatch.away_team
+        let awayFlagImg = dbMatch.away_flag
 
-        if (needsUpdate) {
+        if (jsonMatch.home_team_name_en) {
+          const info = translateCountryName(jsonMatch.home_team_name_en)
+          homeTeamName = info.name
+          homeFlagImg = info.flag
+        } else if (jsonMatch.home_team_label) {
+          homeTeamName = translateLabel(jsonMatch.home_team_label)
+          homeFlagImg = "🏳️"
+        }
+
+        if (jsonMatch.away_team_name_en) {
+          const info = translateCountryName(jsonMatch.away_team_name_en)
+          awayTeamName = info.name
+          awayFlagImg = info.flag
+        } else if (jsonMatch.away_team_label) {
+          awayTeamName = translateLabel(jsonMatch.away_team_label)
+          awayFlagImg = "🏳️"
+        }
+
+        const isFinished = String(jsonMatch.finished).toUpperCase() === "TRUE"
+        const apiHomeScore = (isFinished || jsonMatch.home_score !== "0" || jsonMatch.away_score !== "0") ? parseInt(jsonMatch.home_score, 10) : null
+        const apiAwayScore = (isFinished || jsonMatch.home_score !== "0" || jsonMatch.away_score !== "0") ? parseInt(jsonMatch.away_score, 10) : null
+
+        // Mapeia status
+        let status = "upcoming"
+        if (isFinished) {
+          status = "finished"
+        } else if (jsonMatch.time_elapsed && jsonMatch.time_elapsed !== "notstarted") {
+          status = "active"
+        }
+
+        // 3.1. Verifica se houve alteração nos times/bandeiras
+        const needsTeamsUpdate = 
+          dbMatch.home_team !== homeTeamName || 
+          dbMatch.away_team !== awayTeamName || 
+          dbMatch.home_flag !== homeFlagImg || 
+          dbMatch.away_flag !== awayFlagImg
+
+        if (needsTeamsUpdate) {
           const { error: updateError } = await supabase
             .from('matches')
             .update({
-              home_team: homeInfo.name,
-              home_flag: homeInfo.flag,
-              away_team: awayInfo.name,
-              away_flag: awayInfo.flag
+              home_team: homeTeamName,
+              home_flag: homeFlagImg,
+              away_team: awayTeamName,
+              away_flag: awayFlagImg
             })
             .eq('id', dbMatch.id)
             
           if (updateError) console.error(`Erro ao atualizar times do jogo ${dbMatch.id}:`, updateError)
-          else {
-            updatedCount++
-          }
+          else updatedCount++
         }
 
-        // Verifica se há placar no JSON e o jogo no banco ainda está upcoming
-        const score = jsonMatch.score || {}
-        if (score.ft && dbMatch.status === 'upcoming') {
-          const homeScore = score.ft[0]
-          const awayScore = score.ft[1]
-          
+        // 3.2. Se o jogo finalizou na API mas no banco ainda está upcoming ou active
+        if (isFinished && dbMatch.status !== 'finished') {
           const { error: finalizeError } = await supabase.rpc('finalize_match', {
             p_match_id: dbMatch.id,
-            p_home_score: homeScore,
-            p_away_score: awayScore
+            p_home_score: apiHomeScore,
+            p_away_score: apiAwayScore
           })
           
           if (finalizeError) console.error(`Erro ao finalizar jogo ${dbMatch.id}:`, finalizeError)
           else finalizedCount++
+        } 
+        // 3.3. Se o jogo está rolando (placar em tempo real) ou o placar mudou sem finalizar ainda
+        else if (!isFinished && (dbMatch.home_score !== apiHomeScore || dbMatch.away_score !== apiAwayScore || dbMatch.status !== status)) {
+          const { error: liveError } = await supabase
+            .from('matches')
+            .update({
+              home_score: apiHomeScore,
+              away_score: apiAwayScore,
+              status: status
+            })
+            .eq('id', dbMatch.id)
+
+          if (liveError) console.error(`Erro ao atualizar placar ao vivo do jogo ${dbMatch.id}:`, liveError)
+          else updatedCount++
         }
       }
 
-      addToast(`Sincronização concluída! ${updatedCount} jogos atualizados e ${finalizedCount} placares lançados.`, 'success')
+      addToast(`Sincronização concluída! ${updatedCount} atualizações de jogos/placares e ${finalizedCount} jogos finalizados oficialmente.`, 'success')
       loadMatches()
     } catch (err) {
       console.error(err)
@@ -251,7 +353,7 @@ export default function Admin() {
           disabled={actionLoading}
           style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}
         >
-          {actionLoading ? 'Sincronizando...' : '🔄 Sincronizar OpenFootball'}
+          {actionLoading ? 'Sincronizando...' : '🔄 Sincronizar API'}
         </button>
       </div>
 
