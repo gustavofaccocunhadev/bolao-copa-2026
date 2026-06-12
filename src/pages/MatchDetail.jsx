@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
+import { getFlagUrl } from '../lib/flags'
 
 export default function MatchDetail() {
   const { id } = useParams()
@@ -235,7 +236,11 @@ export default function MatchDetail() {
 
         <div className="match-teams" style={{ margin: 'var(--space-8) 0' }}>
           <div className="match-team">
-            <span className="team-flag">{match.home_flag}</span>
+            <img 
+              src={getFlagUrl(match.home_flag, match.home_team)} 
+              alt="" 
+              style={{ width: '64px', height: '42px', objectFit: 'cover', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)', marginBottom: 'var(--space-2)' }} 
+            />
             <span className="team-name" style={{ fontSize: 'var(--font-lg)' }}>{match.home_team}</span>
           </div>
 
@@ -255,7 +260,11 @@ export default function MatchDetail() {
           </div>
 
           <div className="match-team">
-            <span className="team-flag">{match.away_flag}</span>
+            <img 
+              src={getFlagUrl(match.away_flag, match.away_team)} 
+              alt="" 
+              style={{ width: '64px', height: '42px', objectFit: 'cover', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)', marginBottom: 'var(--space-2)' }} 
+            />
             <span className="team-name" style={{ fontSize: 'var(--font-lg)' }}>{match.away_team}</span>
           </div>
         </div>

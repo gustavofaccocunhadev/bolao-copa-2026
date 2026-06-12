@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
+import { getFlagUrl } from '../lib/flags'
 
 export default function GroupDetail() {
   const { id } = useParams()
@@ -327,9 +328,15 @@ export default function GroupDetail() {
                     </div>
 
                     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
-                      <span>{match.home_flag} {match.home_team}</span>
-                      <span style={{ fontWeight: '700' }}>vs</span>
-                      <span>{match.away_team} {match.away_flag}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                        <img src={getFlagUrl(match.home_flag, match.home_team)} alt="" style={{ width: '32px', height: '21px', objectFit: 'cover', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)' }} />
+                        <span>{match.home_team}</span>
+                      </div>
+                      <span style={{ fontWeight: '700', color: 'var(--text-muted)' }}>vs</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                        <span>{match.away_team}</span>
+                        <img src={getFlagUrl(match.away_flag, match.away_team)} alt="" style={{ width: '32px', height: '21px', objectFit: 'cover', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)' }} />
+                      </div>
                     </div>
 
                     <h4 style={{ fontSize: 'var(--font-xs)', fontWeight: '600', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 'var(--space-2)' }}>

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import { supabase } from '../lib/supabase'
+import { getFlagUrl } from '../lib/flags'
 
 export default function Profile() {
   const { user, profile, refreshProfile } = useAuth()
@@ -251,7 +252,17 @@ export default function Profile() {
                 {history.map((g) => (
                   <tr key={g.id}>
                     <td>
-                      <span>{g.matches?.home_flag} {g.matches?.home_team} × {g.matches?.away_team} {g.matches?.away_flag}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)', flex: 1, justifyContent: 'flex-end' }}>
+                          <span>{g.matches?.home_team}</span>
+                          <img src={getFlagUrl(g.matches?.home_flag, g.matches?.home_team)} alt="" style={{ width: '24px', height: '16px', objectFit: 'cover', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)' }} />
+                        </div>
+                        <span style={{ color: 'var(--text-muted)' }}>×</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)', flex: 1 }}>
+                          <img src={getFlagUrl(g.matches?.away_flag, g.matches?.away_team)} alt="" style={{ width: '24px', height: '16px', objectFit: 'cover', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)' }} />
+                          <span>{g.matches?.away_team}</span>
+                        </div>
+                      </div>
                     </td>
                     <td style={{ fontWeight: 700 }}>
                       {g.home_score} × {g.away_score}

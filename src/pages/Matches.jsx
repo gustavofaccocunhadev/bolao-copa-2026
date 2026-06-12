@@ -16,31 +16,7 @@ const STAGE_LABELS = {
 
 const GROUP_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L']
 
-// Helper para converter emoji de bandeira para URL de imagem de bandeira real (Flagpedia)
-const emojiToCountryCode = (emoji) => {
-  if (!emoji) return 'un'
-  if (emoji === '🏴󠁧󠁢󠁥󠁮󠁧󠁿' || emoji === '🏴󠁧󠁢󠁥󠁮󠁧󠁿') return 'gb-eng'
-  if (emoji === '🏴󠁧󠁢󠁳󠁣󠁴󠁿' || emoji === '🏴󠁧󠁢󠁳󠁣󠁴󠁿') return 'gb-sct'
-  if (emoji === '🏴󠁧󠁢󠁷󠁬󠁳󠁿' || emoji === '🏴󠁧󠁢󠁷󠁬󠁳󠁿') return 'gb-wls'
-  
-  try {
-    const codePoints = Array.from(emoji).map(char => char.codePointAt(0))
-    const letters = codePoints
-      .filter(cp => cp >= 0x1F1E6 && cp <= 0x1F1FF)
-      .map(cp => String.fromCharCode(cp - 0x1F1E6 + 65))
-    return letters.join('').toLowerCase()
-  } catch (e) {
-    return 'un'
-  }
-}
-
-const getFlagUrl = (emoji) => {
-  const code = emojiToCountryCode(emoji)
-  if (code === 'gb-eng') return 'https://flagcdn.com/w160/gb-eng.png'
-  if (code === 'gb-sct') return 'https://flagcdn.com/w160/gb-sct.png'
-  if (code === 'gb-wls') return 'https://flagcdn.com/w160/gb-wls.png'
-  return `https://flagcdn.com/w160/${code}.png`
-}
+import { getFlagUrl } from '../lib/flags'
 
 export default function Matches() {
   const { user } = useAuth()
@@ -315,7 +291,7 @@ export default function Matches() {
                   {/* Mandante */}
                   <div className="match-team" style={{ flex: 1 }}>
                     <img 
-                      src={getFlagUrl(match.home_flag)} 
+                      src={getFlagUrl(match.home_flag, match.home_team)} 
                       alt="" 
                       style={{ width: '64px', height: '42px', objectFit: 'cover', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)', boxShadow: 'var(--shadow-sm)', marginBottom: 'var(--space-2)' }} 
                     />
@@ -371,7 +347,7 @@ export default function Matches() {
                   {/* Visitante */}
                   <div className="match-team" style={{ flex: 1 }}>
                     <img 
-                      src={getFlagUrl(match.away_flag)} 
+                      src={getFlagUrl(match.away_flag, match.away_team)} 
                       alt="" 
                       style={{ width: '64px', height: '42px', objectFit: 'cover', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)', boxShadow: 'var(--shadow-sm)', marginBottom: 'var(--space-2)' }} 
                     />

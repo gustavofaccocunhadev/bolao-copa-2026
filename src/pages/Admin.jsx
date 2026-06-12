@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
+import { getFlagUrl } from '../lib/flags'
 
 export default function Admin() {
   const { profile } = useAuth()
@@ -279,12 +280,18 @@ export default function Admin() {
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--font-sm)' }}>
-                      <span>{match.home_flag} {match.home_team}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', fontSize: 'var(--font-sm)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)' }}>
+                        <img src={getFlagUrl(match.home_flag, match.home_team)} alt="" style={{ width: '24px', height: '16px', objectFit: 'cover', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)' }} />
+                        <span>{match.home_team}</span>
+                      </div>
                       <span style={{ fontWeight: '700' }}>
                         {match.status === 'finished' ? `${match.home_score} x ${match.away_score}` : 'vs'}
                       </span>
-                      <span>{match.away_team} {match.away_flag}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)' }}>
+                        <span>{match.away_team}</span>
+                        <img src={getFlagUrl(match.away_flag, match.away_team)} alt="" style={{ width: '24px', height: '16px', objectFit: 'cover', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)' }} />
+                      </div>
                     </div>
 
                     <button
@@ -306,8 +313,16 @@ export default function Admin() {
         <div className="modal-overlay">
           <div className="modal-content">
             <h2 className="modal-title" style={{ textAlign: 'center' }}>Lançar Resultado Oficial</h2>
-            <div style={{ textAlign: 'center', marginBottom: 'var(--space-6)', fontWeight: '600' }}>
-              {selectedMatch.home_flag} {selectedMatch.home_team} vs {selectedMatch.away_team} {selectedMatch.away_flag}
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-6)', fontWeight: '600' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)' }}>
+                <img src={getFlagUrl(selectedMatch.home_flag, selectedMatch.home_team)} alt="" style={{ width: '28px', height: '18px', objectFit: 'cover', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)' }} />
+                <span>{selectedMatch.home_team}</span>
+              </div>
+              <span style={{ color: 'var(--text-muted)' }}>vs</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)' }}>
+                <span>{selectedMatch.away_team}</span>
+                <img src={getFlagUrl(selectedMatch.away_flag, selectedMatch.away_team)} alt="" style={{ width: '28px', height: '18px', objectFit: 'cover', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)' }} />
+              </div>
             </div>
 
             <form onSubmit={handleFinalizeMatch}>
