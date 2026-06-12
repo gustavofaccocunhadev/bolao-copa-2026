@@ -3,6 +3,25 @@ import { createClient } from '@supabase/supabase-js';
 // Segredo de acesso para o cron-job.org
 const SYNC_SECRET_KEY = "ObruxoSyncSecret2026";
 
+const STADIUM_TIMEZONES = {
+  "1": "-06:00", // Estadio Azteca
+  "2": "-06:00", // Estadio Akron
+  "3": "-06:00", // Estadio BBVA
+  "4": "-05:00", // AT&T Stadium (Dallas)
+  "5": "-05:00", // NRG Stadium (Houston)
+  "6": "-05:00", // Arrowhead Stadium (Kansas City)
+  "7": "-04:00", // Mercedes-Benz Stadium (Atlanta)
+  "8": "-04:00", // Hard Rock Stadium (Miami)
+  "9": "-04:00", // Gillette Stadium (Boston)
+  "10": "-04:00", // Lincoln Financial Field (Philadelphia)
+  "11": "-04:00", // MetLife Stadium (NY/NJ)
+  "12": "-04:00", // BMO Field (Toronto)
+  "13": "-07:00", // BC Place (Vancouver)
+  "14": "-07:00", // Lumen Field (Seattle)
+  "15": "-07:00", // Levi's Stadium (San Francisco)
+  "16": "-07:00"  // SoFi Stadium (Los Angeles)
+};
+
 export async function handler(event, context) {
   // 1. Validar a chave de segurança na URL para impedir acessos indesejados
   const queryKey = event.queryStringParameters && event.queryStringParameters.key;
@@ -254,21 +273,39 @@ export async function handler(event, context) {
         status = "active";
       }
 
-      // 5.1. Atualização dos times e flags
+      // Parse e mapeamento de data
+      let apiScheduledAt = dbMatch.scheduled_at;
+      if (jsonMatch.local_date) {
+        const stadiumId = String(jsonMatch.stadium_id);
+        const tz = STADIUM_TIMEZONES[stadiumId] || "-04:00";
+        const parts = jsonMatch.local_date.split(" ");
+        if (parts.length === 2) {
+          const dateParts = parts[0].split("/");
+          const timeParts = parts[1].split(":");
+          if (dateParts.length === 3 && timeParts.length === 2) {
+            apiScheduledAt = `${dateParts[2]}-${dateParts[0]}-${dateParts[1]}T${timeParts[0]}:${timeParts[1]}:00${tz}`;
+          }
+        }
+      }
+
+      // 5.1. Atualização dos times, flags e data de agendamento
       const needsTeamsUpdate = 
         dbMatch.home_team !== homeTeamName || 
         dbMatch.away_team !== awayTeamName || 
         dbMatch.home_flag !== homeFlagImg || 
         dbMatch.away_flag !== awayFlagImg;
 
-      if (needsTeamsUpdate) {
+      const needsDateUpdate = jsonMatch.local_date && (new Date(dbMatch.scheduled_at).getTime() !== new Date(apiScheduledAt).getTime());
+
+      if (needsTeamsUpdate || needsDateUpdate) {
         await supabase
           .from('matches')
           .update({
             home_team: homeTeamName,
             home_flag: homeFlagImg,
             away_team: awayTeamName,
-            away_flag: awayFlagImg
+            away_flag: awayFlagImg,
+            scheduled_at: apiScheduledAt
           })
           .eq('id', dbMatch.id);
         updatedCount++;

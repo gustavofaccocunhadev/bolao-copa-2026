@@ -4,6 +4,25 @@ const path = require('path');
 const API_URL = "https://worldcup26.ir";
 const SQL_OUTPUT_PATH = path.join(__dirname, "update_matches.sql");
 
+const STADIUM_TIMEZONES = {
+  "1": "-06:00", // Estadio Azteca
+  "2": "-06:00", // Estadio Akron
+  "3": "-06:00", // Estadio BBVA
+  "4": "-05:00", // AT&T Stadium (Dallas)
+  "5": "-05:00", // NRG Stadium (Houston)
+  "6": "-05:00", // Arrowhead Stadium (Kansas City)
+  "7": "-04:00", // Mercedes-Benz Stadium (Atlanta)
+  "8": "-04:00", // Hard Rock Stadium (Miami)
+  "9": "-04:00", // Gillette Stadium (Boston)
+  "10": "-04:00", // Lincoln Financial Field (Philadelphia)
+  "11": "-04:00", // MetLife Stadium (NY/NJ)
+  "12": "-04:00", // BMO Field (Toronto)
+  "13": "-07:00", // BC Place (Vancouver)
+  "14": "-07:00", // Lumen Field (Seattle)
+  "15": "-07:00", // Levi's Stadium (San Francisco)
+  "16": "-07:00"  // SoFi Stadium (Los Angeles)
+};
+
 // Mapa de Tradução de Países e Bandeiras atualizado com 48 seleções e nomes da nova API
 const COUNTRY_MAP = {
   "Mexico": { name: "México", flag: "🇲🇽" },
@@ -210,8 +229,24 @@ async function run() {
         awayFlag = "'🏳️'"; // Placeholder
       }
 
+      // Parse e mapeamento de data
+      let dateQuery = "";
+      if (g.local_date) {
+        const stadiumId = String(g.stadium_id);
+        const tz = STADIUM_TIMEZONES[stadiumId] || "-04:00";
+        const parts = g.local_date.split(" ");
+        if (parts.length === 2) {
+          const dateParts = parts[0].split("/");
+          const timeParts = parts[1].split(":");
+          if (dateParts.length === 3 && timeParts.length === 2) {
+            const apiScheduledAt = `${dateParts[2]}-${dateParts[0]}-${dateParts[1]}T${timeParts[0]}:${timeParts[1]}:00${tz}`;
+            dateQuery = `scheduled_at = '${apiScheduledAt}', `;
+          }
+        }
+      }
+
       // Constrói o comando de UPDATE de forma cirúrgica
-      let query = `UPDATE public.matches SET `;
+      let query = `UPDATE public.matches SET ${dateQuery}`;
       
       // Atualiza times e flags se não forem nulos
       if (homeTeam !== "NULL") {

@@ -1301,4 +1301,374 @@ img { max-width: 100%; display: block; }
   border-color: var(--text-secondary);
 }
 
+/* ── NOVAS MELHORIAS DASHBOARD 2 COLUNAS & PLACAR AO VIVO ── */
+
+.dashboard-header-flex {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-8);
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-8);
+  align-items: start;
+}
+
+@media (min-width: 1025px) {
+  .dashboard-grid {
+    grid-template-columns: 2.1fr 0.9fr;
+  }
+}
+
+.dashboard-left-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.dashboard-right-col {
+  position: sticky;
+  top: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+/* 🟢 Bola Rolando (Ao Vivo) */
+.live-section-container {
+  margin-bottom: var(--space-2);
+}
+
+.live-card {
+  position: relative;
+  background: linear-gradient(135deg, rgba(6, 10, 20, 0.9) 0%, rgba(12, 22, 38, 0.95) 100%);
+  border: 1px solid rgba(0, 230, 118, 0.4);
+  box-shadow: 0 0 15px rgba(0, 230, 118, 0.15), var(--shadow-md);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  overflow: hidden;
+}
+
+.live-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--accent-green), #00e5ff);
+}
+
+.live-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--font-xs);
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  margin-bottom: var(--space-5);
+  color: var(--text-secondary);
+}
+
+.live-indicator-flex {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--accent-green);
+}
+
+.pulse-dot {
+  width: 8px;
+  height: 8px;
+  background-color: var(--accent-green);
+  border-radius: 50%;
+  box-shadow: 0 0 0 0 rgba(0, 230, 118, 0.7);
+  animation: pulse-green 1.5s infinite;
+}
+
+@keyframes pulse-green {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(0, 230, 118, 0.7);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 6px rgba(0, 230, 118, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(0, 230, 118, 0);
+  }
+}
+
+.live-teams-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: var(--space-4) 0;
+}
+
+.live-team-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  width: 35%;
+}
+
+.live-team-flag {
+  width: 72px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+}
+
+.live-team-name {
+  font-size: var(--font-sm);
+  font-weight: 700;
+  text-align: center;
+  color: var(--text-primary);
+}
+
+.live-score-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 30%;
+}
+
+.live-score-display {
+  font-size: var(--font-4xl);
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  line-height: 1;
+}
+
+.live-badge {
+  margin-top: var(--space-3);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  background: rgba(0, 229, 255, 0.1);
+  color: #00e5ff;
+  border: 1px solid rgba(0, 229, 255, 0.25);
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  text-transform: uppercase;
+  animation: glow-cyan 2s infinite alternate;
+}
+
+@keyframes glow-cyan {
+  from {
+    box-shadow: 0 0 2px rgba(0, 229, 255, 0.2);
+  }
+  to {
+    box-shadow: 0 0 10px rgba(0, 229, 255, 0.6);
+  }
+}
+
+.live-guess-bar {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid rgba(148, 163, 184, 0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.live-guess-label {
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+}
+
+.live-guess-value {
+  font-size: var(--font-base);
+  font-weight: 800;
+  color: var(--accent-yellow);
+  background: var(--accent-yellow-glow);
+  padding: 3px 12px;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(255, 214, 0, 0.2);
+}
+
+/* Agrupamento por Dia */
+.day-group {
+  margin-bottom: var(--space-6);
+}
+
+.day-title {
+  font-size: var(--font-xs);
+  font-weight: 800;
+  color: var(--accent-yellow);
+  letter-spacing: 1px;
+  margin-bottom: var(--space-4);
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.day-title::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid rgba(255, 214, 0, 0.1);
+}
+
+/* Placar de Resultados Recentes */
+.recent-score-badge {
+  background: rgba(0, 230, 118, 0.12);
+  border: 1.5px solid rgba(0, 230, 118, 0.25);
+  color: var(--accent-green);
+  font-size: var(--font-lg);
+  font-weight: 800;
+  padding: 4px 16px;
+  border-radius: var(--radius-md);
+  letter-spacing: 1px;
+}
+
+.recent-finished-label {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--accent-green);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Classificação Lateral */
+.classification-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5) 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.classification-header {
+  padding: 0 var(--space-5) var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.classification-title {
+  font-size: var(--font-base);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.classification-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 580px;
+  overflow-y: auto;
+}
+
+.classification-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.04);
+  transition: background var(--transition-fast);
+  cursor: pointer;
+}
+
+.classification-item:hover {
+  background: var(--bg-card-hover);
+}
+
+.classification-item:last-child {
+  border-bottom: none;
+}
+
+.classification-item-active {
+  background: rgba(0, 230, 118, 0.04);
+  border-left: 3px solid var(--accent-green);
+}
+
+.classification-left-side {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.classification-rank-num {
+  font-size: var(--font-xs);
+  font-weight: 800;
+  color: var(--text-muted);
+  width: 20px;
+  text-align: center;
+}
+
+.classification-rank-num.rank-1 { color: var(--accent-yellow); font-size: var(--font-sm); }
+.classification-rank-num.rank-2 { color: #b0b8c2; font-size: var(--font-sm); }
+.classification-rank-num.rank-3 { color: #cd7f32; font-size: var(--font-sm); }
+
+.classification-user-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent-green), var(--accent-blue));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 10px;
+  color: white;
+  flex-shrink: 0;
+}
+
+.classification-user-details {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.classification-username {
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.classification-user-stats {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.classification-right-side {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.classification-score {
+  font-size: var(--font-sm);
+  font-weight: 800;
+  color: var(--accent-green);
+  text-align: right;
+}
+
+.classification-arrow {
+  color: var(--text-muted);
+  font-size: var(--font-xs);
+  font-weight: 700;
+}
+
+
 
