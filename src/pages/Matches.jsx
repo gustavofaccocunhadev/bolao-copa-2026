@@ -16,7 +16,7 @@ const STAGE_LABELS = {
 
 const GROUP_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L']
 
-import { getFlagUrl } from '../lib/flags'
+import { getFlagUrl, isMatchConfirmed } from '../lib/flags'
 
 export default function Matches() {
   const { user } = useAuth()
@@ -299,7 +299,11 @@ export default function Matches() {
                       {match.home_team}
                     </span>
                     
-                    {!locked ? (
+                    {!isMatchConfirmed(match) ? (
+                      <div style={{ color: 'var(--text-muted)', fontSize: 'var(--font-xs)', marginTop: 'var(--space-3)', fontStyle: 'italic' }}>
+                        Aguardando times 🕒
+                      </div>
+                    ) : !locked ? (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginTop: 'var(--space-3)' }}>
                         <button 
                           type="button" 
@@ -355,7 +359,11 @@ export default function Matches() {
                       {match.away_team}
                     </span>
                     
-                    {!locked ? (
+                    {!isMatchConfirmed(match) ? (
+                      <div style={{ color: 'var(--text-muted)', fontSize: 'var(--font-xs)', marginTop: 'var(--space-3)', fontStyle: 'italic' }}>
+                        Aguardando times 🕒
+                      </div>
+                    ) : !locked ? (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginTop: 'var(--space-3)' }}>
                         <button 
                           type="button" 
@@ -390,7 +398,11 @@ export default function Matches() {
 
                 {/* Ações / Rodapé do Card */}
                 <div style={{ marginTop: 'var(--space-4)', paddingTop: 'var(--space-4)', borderTop: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                  {!locked ? (
+                  {!isMatchConfirmed(match) ? (
+                    <div style={{ textAlign: 'center', padding: 'var(--space-2)', background: 'rgba(255,255,255,0.02)', borderRadius: 'var(--radius-sm)', border: '1px dashed var(--border-color)', color: 'var(--text-muted)', fontSize: 'var(--font-xs)' }}>
+                      Confronto indefinido. Palpites bloqueados. 🕒
+                    </div>
+                  ) : !locked ? (
                     <button
                       type="button"
                       className={`btn btn-block ${hasGuess ? 'btn-secondary' : 'btn-primary'}`}

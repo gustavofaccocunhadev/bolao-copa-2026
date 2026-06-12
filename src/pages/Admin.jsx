@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
-import { getFlagUrl } from '../lib/flags'
+import { getFlagUrl, translateCountryName } from '../lib/flags'
 
 export default function Admin() {
   const { profile } = useAuth()
@@ -26,6 +26,15 @@ export default function Admin() {
   const [homeScoreResult, setHomeScoreResult] = useState('')
   const [awayScoreResult, setAwayScoreResult] = useState('')
   const [showFinalizeModal, setShowFinalizeModal] = useState(false)
+
+  // Modal de edição de partida
+  const [editMatch, setEditMatch] = useState(null)
+  const [editHomeTeam, setEditHomeTeam] = useState('')
+  const [editAwayTeam, setEditAwayTeam] = useState('')
+  const [editHomeFlag, setEditHomeFlag] = useState('🏳️')
+  const [editAwayFlag, setEditAwayFlag] = useState('🏳️')
+  const [editScheduledAt, setEditScheduledAt] = useState('')
+  const [showEditModal, setShowEditModal] = useState(false)
 
   useEffect(() => {
     if (profile?.is_admin) {
@@ -135,6 +144,137 @@ export default function Admin() {
     }
   }
 
+  const openEditModal = (match) => {
+    setEditMatch(match)
+    setEditHomeTeam(match.home_team)
+    setEditAwayTeam(match.away_team)
+    setEditHomeFlag(match.home_flag || '🏳️')
+    setEditAwayFlag(match.away_flag || '🏳️')
+    if (match.scheduled_at) {
+      const date = new Date(match.scheduled_at)
+      const offset = date.getTimezoneOffset()
+      const localDate = new Date(date.getTime() - offset * 60 * 1000)
+      setEditScheduledAt(localDate.toISOString().slice(0, 16))
+    } else {
+      setEditScheduledAt('')
+    }
+    setShowEditModal(true)
+  }
+
+  const handleEditMatch = async (e) => {
+    e.preventDefault()
+    if (!editMatch) return
+    if (!editHomeTeam.trim() || !editAwayTeam.trim() || !editScheduledAt) {
+      addToast('Preencha os campos obrigatórios!', 'error')
+      return
+    }
+
+    setActionLoading(true)
+    try {
+      const { error } = await supabase
+        .from('matches')
+        .update({
+          home_team: editHomeTeam.trim(),
+          away_team: editAwayTeam.trim(),
+          home_flag: editHomeFlag.trim(),
+          away_flag: editAwayFlag.trim(),
+          scheduled_at: new Date(editScheduledAt).toISOString()
+        })
+        .eq('id', editMatch.id)
+
+      if (error) throw error
+
+      addToast('Partida atualizada com sucesso!', 'success')
+      setShowEditModal(false)
+      setEditMatch(null)
+      loadMatches()
+    } catch (err) {
+      console.error('Erro ao editar partida:', err)
+      addToast('Erro ao editar partida: ' + err.message, 'error')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleSyncOpenFootball = async () => {
+    setActionLoading(true)
+    addToast('Iniciando sincronização com OpenFootball...', 'info')
+    try {
+      const res = await fetch("https://raw.githubusercontent.com/openfootball/worldcup.json/master/2026/worldcup.json")
+      if (!res.ok) throw new Error("Erro ao baixar dados do GitHub")
+      const json = await res.json()
+      
+      if (!json.matches || json.matches.length === 0) {
+        throw new Error("Nenhum jogo encontrado no JSON")
+      }
+
+      // Carrega partidas atuais do banco
+      const { data: dbMatches, error: dbError } = await supabase
+        .from('matches')
+        .select('*')
+        .order('id', { ascending: true })
+        
+      if (dbError) throw dbError
+
+      let updatedCount = 0;
+      let finalizedCount = 0;
+
+      for (let i = 0; i < json.matches.length; i++) {
+        const jsonMatch = json.matches[i]
+        const dbMatch = dbMatches[i]
+        
+        if (!dbMatch) continue
+
+        const homeInfo = translateCountryName(jsonMatch.team1)
+        const awayInfo = translateCountryName(jsonMatch.team2)
+        
+        // Verifica se o jogo no banco precisa de atualização de times
+        const needsUpdate = dbMatch.home_team !== homeInfo.name || dbMatch.away_team !== awayInfo.name
+
+        if (needsUpdate) {
+          const { error: updateError } = await supabase
+            .from('matches')
+            .update({
+              home_team: homeInfo.name,
+              home_flag: homeInfo.flag,
+              away_team: awayInfo.name,
+              away_flag: awayInfo.flag
+            })
+            .eq('id', dbMatch.id)
+            
+          if (updateError) console.error(`Erro ao atualizar times do jogo ${dbMatch.id}:`, updateError)
+          else {
+            updatedCount++
+          }
+        }
+
+        // Verifica se há placar no JSON e o jogo no banco ainda está upcoming
+        const score = jsonMatch.score || {}
+        if (score.ft && dbMatch.status === 'upcoming') {
+          const homeScore = score.ft[0]
+          const awayScore = score.ft[1]
+          
+          const { error: finalizeError } = await supabase.rpc('finalize_match', {
+            p_match_id: dbMatch.id,
+            p_home_score: homeScore,
+            p_away_score: awayScore
+          })
+          
+          if (finalizeError) console.error(`Erro ao finalizar jogo ${dbMatch.id}:`, finalizeError)
+          else finalizedCount++
+        }
+      }
+
+      addToast(`Sincronização concluída! ${updatedCount} jogos atualizados e ${finalizedCount} placares lançados.`, 'success')
+      loadMatches()
+    } catch (err) {
+      console.error(err)
+      addToast('Erro na sincronização: ' + err.message, 'error')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
   // Se não for admin, exibe aviso e bloqueia
   if (!profile?.is_admin) {
     return (
@@ -150,9 +290,19 @@ export default function Admin() {
 
   return (
     <div className="page-container">
-      <div className="page-header">
-        <h1 className="page-title">Painel Admin 🔧</h1>
-        <p className="page-subtitle">Gerencie partidas da Copa e lance os placares oficiais</p>
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
+        <div>
+          <h1 className="page-title">Painel Admin 🔧</h1>
+          <p className="page-subtitle">Gerencie partidas da Copa e lance os placares oficiais</p>
+        </div>
+        <button
+          className="btn btn-secondary"
+          onClick={handleSyncOpenFootball}
+          disabled={actionLoading}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}
+        >
+          {actionLoading ? 'Sincronizando...' : '🔄 Sincronizar OpenFootball'}
+        </button>
       </div>
 
       <div className="grid-2">
@@ -294,12 +444,20 @@ export default function Admin() {
                       </div>
                     </div>
 
-                    <button
-                      className={`btn btn-sm ${match.status === 'finished' ? 'btn-outline' : 'btn-primary'}`}
-                      onClick={() => openFinalizeModal(match)}
-                    >
-                      {match.status === 'finished' ? 'Editar Resultado' : 'Lançar Placar'}
-                    </button>
+                    <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                      <button
+                        className="btn btn-sm btn-secondary"
+                        onClick={() => openEditModal(match)}
+                      >
+                        Editar
+                      </button>
+                      <button
+                        className={`btn btn-sm ${match.status === 'finished' ? 'btn-outline' : 'btn-primary'}`}
+                        onClick={() => openFinalizeModal(match)}
+                      >
+                        {match.status === 'finished' ? 'Editar Resultado' : 'Lançar Placar'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -368,6 +526,87 @@ export default function Admin() {
                 </button>
                 <button type="submit" className="btn btn-primary" disabled={actionLoading}>
                   {actionLoading ? 'Finalizando...' : 'Confirmar Resultado'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Editar Partida */}
+      {showEditModal && editMatch && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <h2 className="modal-title" style={{ textAlign: 'center' }}>Editar Confronto</h2>
+            <form onSubmit={handleEditMatch}>
+              <div className="grid-2" style={{ gap: 'var(--space-3)', marginBottom: 'var(--space-3)' }}>
+                <div className="form-group">
+                  <label className="form-label">Time Mandante</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={editHomeTeam}
+                    onChange={(e) => setEditHomeTeam(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Bandeira Mandante</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={editHomeFlag}
+                    onChange={(e) => setEditHomeFlag(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid-2" style={{ gap: 'var(--space-3)', marginBottom: 'var(--space-3)' }}>
+                <div className="form-group">
+                  <label className="form-label">Time Visitante</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={editAwayTeam}
+                    onChange={(e) => setEditAwayTeam(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Bandeira Visitante</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={editAwayFlag}
+                    onChange={(e) => setEditAwayFlag(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Data e Horário</label>
+                <input
+                  type="datetime-local"
+                  className="form-input"
+                  value={editScheduledAt}
+                  onChange={(e) => setEditScheduledAt(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: 'var(--space-3)', justifyContent: 'flex-end', marginTop: 'var(--space-6)' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => { setShowEditModal(false); setEditMatch(null); }}
+                  disabled={actionLoading}
+                >
+                  Cancelar
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={actionLoading}>
+                  {actionLoading ? 'Salvando...' : 'Salvar Confronto'}
                 </button>
               </div>
             </form>

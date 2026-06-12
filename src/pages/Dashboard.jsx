@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../contexts/ToastContext'
 
-import { getFlagUrl } from '../lib/flags'
+import { getFlagUrl, isMatchConfirmed } from '../lib/flags'
 
 export default function Dashboard() {
   const { user, profile } = useAuth()
@@ -340,7 +340,11 @@ export default function Dashboard() {
                         {match.home_team}
                       </span>
                       
-                      {!locked ? (
+                      {!isMatchConfirmed(match) ? (
+                        <div style={{ color: 'var(--text-muted)', fontSize: 'var(--font-xs)', marginTop: 'var(--space-2)', fontStyle: 'italic' }}>
+                          Aguardando times 🕒
+                        </div>
+                      ) : !locked ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
                           <button 
                             type="button" 
@@ -383,7 +387,11 @@ export default function Dashboard() {
                         {match.away_team}
                       </span>
                       
-                      {!locked ? (
+                      {!isMatchConfirmed(match) ? (
+                        <div style={{ color: 'var(--text-muted)', fontSize: 'var(--font-xs)', marginTop: 'var(--space-2)', fontStyle: 'italic' }}>
+                          Aguardando times 🕒
+                        </div>
+                      ) : !locked ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
                           <button 
                             type="button" 
@@ -416,7 +424,11 @@ export default function Dashboard() {
 
                   {/* Salvar Palpite */}
                   <div style={{ marginTop: 'var(--space-3)', paddingTop: 'var(--space-3)', borderTop: '1px solid var(--border-color)' }}>
-                    {!locked ? (
+                    {!isMatchConfirmed(match) ? (
+                      <div style={{ textAlign: 'center', padding: 'var(--space-2)', background: 'rgba(255,255,255,0.02)', borderRadius: 'var(--radius-sm)', border: '1px dashed var(--border-color)', color: 'var(--text-muted)', fontSize: 'var(--font-xs)' }}>
+                        Confronto indefinido. Palpites bloqueados. 🕒
+                      </div>
+                    ) : !locked ? (
                       <button
                         type="button"
                         className={`btn btn-block btn-sm ${hasGuess ? 'btn-secondary' : 'btn-primary'}`}

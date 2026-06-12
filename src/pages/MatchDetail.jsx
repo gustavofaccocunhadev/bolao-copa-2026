@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
-import { getFlagUrl } from '../lib/flags'
+import { getFlagUrl, isMatchConfirmed } from '../lib/flags'
 
 export default function MatchDetail() {
   const { id } = useParams()
@@ -283,67 +283,75 @@ export default function MatchDetail() {
             {isLocked ? 'Seu Palpite Global' : 'Registrar Seu Palpite'}
           </h2>
 
-          <form onSubmit={handleSaveGuess}>
-            <div className="score-input-group" style={{ marginBottom: 'var(--space-6)' }}>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-secondary)', marginBottom: 'var(--space-2)' }}>
-                  {match.home_team}
-                </div>
-                <input
-                  type="number"
-                  min="0"
-                  className="score-input"
-                  value={homeScoreInput}
-                  onChange={(e) => setHomeScoreInput(e.target.value)}
-                  disabled={isLocked || saving}
-                  required
-                />
-              </div>
-
-              <div className="score-vs">x</div>
-
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-secondary)', marginBottom: 'var(--space-2)' }}>
-                  {match.away_team}
-                </div>
-                <input
-                  type="number"
-                  min="0"
-                  className="score-input"
-                  value={awayScoreInput}
-                  onChange={(e) => setAwayScoreInput(e.target.value)}
-                  disabled={isLocked || saving}
-                  required
-                />
-              </div>
+          {!isMatchConfirmed(match) ? (
+            <div style={{ textAlign: 'center', padding: 'var(--space-6) var(--space-4)', background: 'rgba(255,255,255,0.02)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border-color)', color: 'var(--text-muted)' }}>
+              <span style={{ fontSize: '2rem', display: 'block', marginBottom: 'var(--space-3)' }}>🕒</span>
+              <p style={{ fontWeight: '600', marginBottom: 'var(--space-1)' }}>Confronto Indefinido</p>
+              <p style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>Os palpites serão liberados assim que os times da partida forem confirmados.</p>
             </div>
+          ) : (
+            <form onSubmit={handleSaveGuess}>
+              <div className="score-input-group" style={{ marginBottom: 'var(--space-6)' }}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-secondary)', marginBottom: 'var(--space-2)' }}>
+                    {match.home_team}
+                  </div>
+                  <input
+                    type="number"
+                    min="0"
+                    className="score-input"
+                    value={homeScoreInput}
+                    onChange={(e) => setHomeScoreInput(e.target.value)}
+                    disabled={isLocked || saving}
+                    required
+                  />
+                </div>
 
-            {!isLocked ? (
-              <button type="submit" className="btn btn-primary btn-block" disabled={saving}>
-                {saving ? 'Salvando...' : 'Salvar Palpite'}
-              </button>
-            ) : (
-              <div style={{ textAlign: 'center' }}>
-                {myGuess ? (
-                  <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)' }}>
-                    <p style={{ fontSize: 'var(--font-sm)', color: 'var(--text-secondary)' }}>Você palpitou:</p>
-                    <p style={{ fontSize: 'var(--font-2xl)', fontWeight: '800', margin: 'var(--space-2) 0' }}>
-                      {myGuess.home_score} x {myGuess.away_score}
-                    </p>
-                    {match.status === 'finished' && (
-                      <span className={`guess-points ${getPointsClass(myGuess.points)}`} style={{ display: 'inline-block' }}>
-                        {getPointsLabel(myGuess.points)}
-                      </span>
-                    )}
+                <div className="score-vs">x</div>
+
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-secondary)', marginBottom: 'var(--space-2)' }}>
+                    {match.away_team}
                   </div>
-                ) : (
-                  <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                    Você não registrou palpite para esta partida antes do prazo.
-                  </div>
-                )}
+                  <input
+                    type="number"
+                    min="0"
+                    className="score-input"
+                    value={awayScoreInput}
+                    onChange={(e) => setAwayScoreInput(e.target.value)}
+                    disabled={isLocked || saving}
+                    required
+                  />
+                </div>
               </div>
-            )}
-          </form>
+
+              {!isLocked ? (
+                <button type="submit" className="btn btn-primary btn-block" disabled={saving}>
+                  {saving ? 'Salvando...' : 'Salvar Palpite'}
+                </button>
+              ) : (
+                <div style={{ textAlign: 'center' }}>
+                  {myGuess ? (
+                    <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)' }}>
+                      <p style={{ fontSize: 'var(--font-sm)', color: 'var(--text-secondary)' }}>Você palpitou:</p>
+                      <p style={{ fontSize: 'var(--font-2xl)', fontWeight: '800', margin: 'var(--space-2) 0' }}>
+                        {myGuess.home_score} x {myGuess.away_score}
+                      </p>
+                      {match.status === 'finished' && (
+                        <span className={`guess-points ${getPointsClass(myGuess.points)}`} style={{ display: 'inline-block' }}>
+                          {getPointsLabel(myGuess.points)}
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                      Você não registrou palpite para esta partida antes do prazo.
+                    </div>
+                  )}
+                </div>
+              )}
+            </form>
+          )}
         </div>
 
         {/* Palpites da Galera */}
