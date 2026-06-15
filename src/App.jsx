@@ -21,7 +21,7 @@ import Rules from './pages/Rules'
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename="/bolao-copa-2026">
       <AuthProvider>
         <ToastProvider>
           <Routes>
