@@ -62,12 +62,13 @@ export function AuthProvider({ children }) {
   }
 
   async function signUp(email, password, username) {
+    const redirectUrl = window.location.origin + import.meta.env.BASE_URL + 'dashboard'
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: { username },
-        emailRedirectTo: window.location.origin + '/dashboard',
+        emailRedirectTo: redirectUrl,
       },
     })
     if (error) throw error
@@ -75,10 +76,11 @@ export function AuthProvider({ children }) {
   }
 
   async function signInWithGoogle() {
+    const redirectUrl = window.location.origin + import.meta.env.BASE_URL + 'dashboard'
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: window.location.origin + '/dashboard',
+        redirectTo: redirectUrl,
       },
     })
     if (error) throw error
