@@ -173,3 +173,49 @@ export const isMatchConfirmed = (match) => {
 
   return !isPlaceholder(match.home_team) && !isPlaceholder(match.away_team);
 };
+
+// Formata a string de artilheiros do banco de dados (que vem como array do Postgres) para exibição amigável
+export const formatScorers = (scorersStr) => {
+  if (!scorersStr) return null;
+  try {
+    let clean = scorersStr.trim();
+    if (clean.startsWith('{') && clean.endsWith('}')) {
+      clean = clean.substring(1, clean.length - 1);
+    } else if (clean.startsWith('[') && clean.endsWith(']')) {
+      clean = clean.substring(1, clean.length - 1);
+    }
+    
+    // Split por vírgula considerando possíveis aspas.
+    // Ex: "Nestory Irankunda 27'","C. Metcalfe 75'"
+    const items = [];
+    let current = '';
+    let inQuotes = false;
+    
+    for (let i = 0; i < clean.length; i++) {
+      const char = clean[i];
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === ',' && !inQuotes) {
+        items.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    if (current.trim()) {
+      items.push(current.trim());
+    }
+    
+    const formatted = items.map(item => {
+      let val = item;
+      if (val.startsWith('"') && val.endsWith('"')) {
+        val = val.substring(1, val.length - 1);
+      }
+      return val.replace(/\\"/g, '"').trim();
+    }).filter(Boolean);
+    
+    return formatted.join(', ');
+  } catch (e) {
+    return scorersStr;
+  }
+};

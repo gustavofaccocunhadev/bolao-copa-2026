@@ -266,6 +266,22 @@ async function run() {
         stage = "'final'";
       }
 
+      // Ler autores dos gols
+      let homeScorers = "NULL";
+      if (g.home_scorers && g.home_scorers !== "null" && g.home_scorers !== "NULL") {
+        homeScorers = escapeSQL(g.home_scorers);
+      }
+      
+      let awayScorers = "NULL";
+      if (g.away_scorers && g.away_scorers !== "null" && g.away_scorers !== "NULL") {
+        awayScorers = escapeSQL(g.away_scorers);
+      }
+
+      let timeElapsed = "NULL";
+      if (g.time_elapsed && g.time_elapsed !== "null" && g.time_elapsed !== "NULL") {
+        timeElapsed = escapeSQL(g.time_elapsed);
+      }
+
       // Constrói o comando de UPDATE de forma cirúrgica
       let query = `UPDATE public.matches SET ${dateQuery}`;
       
@@ -277,8 +293,8 @@ async function run() {
         query += `away_team = ${awayTeam}, away_flag = ${awayFlag}, `;
       }
       
-      // Atualiza placares, status, stage e group_label
-      query += `home_score = ${homeScore}, away_score = ${awayScore}, status = ${escapeSQL(status)}, stage = ${stage}, group_label = ${groupLabel} `;
+      // Atualiza placares, status, stage, group_label, scorers e time_elapsed
+      query += `home_score = ${homeScore}, away_score = ${awayScore}, status = ${escapeSQL(status)}, stage = ${stage}, group_label = ${groupLabel}, home_scorers = ${homeScorers}, away_scorers = ${awayScorers}, time_elapsed = ${timeElapsed} `;
       query += `WHERE id = ${matchId};`;
 
       sqlStatements.push(query);

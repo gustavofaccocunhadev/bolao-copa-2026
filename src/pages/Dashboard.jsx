@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../contexts/ToastContext'
 
-import { getFlagUrl, isMatchConfirmed } from '../lib/flags'
+import { getFlagUrl, isMatchConfirmed, formatScorers } from '../lib/flags'
 
 export default function Dashboard() {
   const { user, profile } = useAuth()
@@ -525,11 +525,24 @@ export default function Dashboard() {
                               <span style={{ color: 'var(--text-secondary)' }}>
                                 {formatDate(match.scheduled_at)}
                               </span>
-                              {countdown && (
+                              {match.status === 'active' ? (
+                                <span className="live-badge-timer" style={{ background: '#ef4444', color: '#fff', fontSize: '9px', fontWeight: 'bold', padding: '2px 8px', borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', gap: '4px', textTransform: 'uppercase', animation: 'pulse 1.5s infinite' }}>
+                                  <span className="pulse-dot" style={{ width: '6px', height: '6px', backgroundColor: '#fff', borderRadius: '50%', display: 'inline-block' }} />
+                                  AO VIVO {match.time_elapsed && match.time_elapsed !== 'notstarted' ? `• ${match.time_elapsed}` : ''}
+                                </span>
+                              ) : match.status === 'finished' ? (
+                                <span className="status-badge status-finished" style={{ fontSize: '9px', padding: '2px 8px', background: 'rgba(16, 185, 129, 0.1)', color: 'var(--accent-green)', border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: 'var(--radius-full)' }}>
+                                  ✓ Encerrado
+                                </span>
+                              ) : locked ? (
+                                <span className="status-badge status-locked" style={{ fontSize: '9px', padding: '2px 8px', borderRadius: 'var(--radius-full)' }}>
+                                  🔒 Fechado
+                                </span>
+                              ) : countdown ? (
                                 <span className={`countdown ${new Date(match.scheduled_at) - currentTime < 3600000 ? 'countdown-urgent' : ''}`} style={{ fontSize: '10px', padding: '2px 8px' }}>
                                   ⏱️ {countdown}
                                 </span>
-                              )}
+                              ) : null}
                             </div>
                           </div>
 
@@ -643,6 +656,28 @@ export default function Dashboard() {
 
                           </div>
 
+                          {/* Artilheiros se o jogo estiver ativo ou finalizado */}
+                          {(match.status === 'finished' || match.status === 'active') && (match.home_scorers || match.away_scorers) && (
+                            <div className="match-scorers" style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-4)', fontSize: '10px', color: 'var(--text-secondary)', padding: 'var(--space-2) var(--space-3)', background: 'rgba(255,255,255,0.02)', borderRadius: 'var(--radius-sm)', borderTop: '1px solid rgba(255,255,255,0.04)', marginTop: 'var(--space-2)' }}>
+                              <div style={{ flex: 1, textAlign: 'left', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                                {match.home_scorers && (
+                                  <>
+                                    <span style={{ fontSize: '10px' }}>⚽</span>
+                                    <span>{formatScorers(match.home_scorers)}</span>
+                                  </>
+                                )}
+                              </div>
+                              <div style={{ flex: 1, textAlign: 'right', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                                {match.away_scorers && (
+                                  <>
+                                    <span>{formatScorers(match.away_scorers)}</span>
+                                    <span style={{ fontSize: '10px' }}>⚽</span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
                           {/* Salvar Palpite */}
                           <div style={{ marginTop: 'var(--space-3)', paddingTop: 'var(--space-3)', borderTop: '1px solid var(--border-color)' }}>
                             {!isMatchConfirmed(match) ? (
@@ -725,7 +760,29 @@ export default function Dashboard() {
                         <span className="team-name" style={{ fontSize: 'var(--font-xs)' }}>{match.away_team}</span>
                       </div>
                     </div>
-                    
+
+                    {/* Artilheiros se o jogo estiver ativo ou finalizado */}
+                    {(match.status === 'finished' || match.status === 'active') && (match.home_scorers || match.away_scorers) && (
+                      <div className="match-scorers" style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-4)', fontSize: '10px', color: 'var(--text-secondary)', padding: 'var(--space-2) var(--space-3)', background: 'rgba(255,255,255,0.02)', borderRadius: 'var(--radius-sm)', borderTop: '1px solid rgba(255,255,255,0.04)', marginTop: 'var(--space-2)' }}>
+                        <div style={{ flex: 1, textAlign: 'left', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                          {match.home_scorers && (
+                            <>
+                              <span style={{ fontSize: '10px' }}>⚽</span>
+                              <span>{formatScorers(match.home_scorers)}</span>
+                            </>
+                          )}
+                        </div>
+                        <div style={{ flex: 1, textAlign: 'right', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                          {match.away_scorers && (
+                            <>
+                              <span>{formatScorers(match.away_scorers)}</span>
+                              <span style={{ fontSize: '10px' }}>⚽</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
                     {match.myGuess && (
                       <div className="match-card-footer" style={{ padding: 'var(--space-3) 0 0 0', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-secondary)' }}>

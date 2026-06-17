@@ -3,7 +3,7 @@ import { useParams, Link, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
-import { getFlagUrl, isMatchConfirmed } from '../lib/flags'
+import { getFlagUrl, isMatchConfirmed, formatScorers } from '../lib/flags'
 
 export default function MatchDetail() {
   const { id } = useParams()
@@ -286,9 +286,20 @@ export default function MatchDetail() {
             {match.group_label ? `${match.group_label} • ` : ''}
             {match.stage === 'group_stage' ? 'Fase de Grupos' : 'Fase Eliminatória'}
           </span>
-          <span className={`countdown ${isLocked ? 'countdown-urgent' : ''}`}>
-            {timeRemaining}
-          </span>
+          {match.status === 'active' ? (
+            <span className="live-badge-timer" style={{ background: '#ef4444', color: '#fff', fontSize: '11px', fontWeight: 'bold', padding: '4px 12px', borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', gap: '6px', textTransform: 'uppercase', animation: 'pulse 1.5s infinite' }}>
+              <span className="pulse-dot" style={{ width: '6px', height: '6px', backgroundColor: '#fff', borderRadius: '50%', display: 'inline-block' }} />
+              AO VIVO {match.time_elapsed && match.time_elapsed !== 'notstarted' ? `• ${match.time_elapsed}` : ''}
+            </span>
+          ) : match.status === 'finished' ? (
+            <span className="status-badge status-finished" style={{ fontSize: '11px', padding: '4px 12px', background: 'rgba(16, 185, 129, 0.1)', color: 'var(--accent-green)', border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: 'var(--radius-full)' }}>
+              ✓ Encerrado
+            </span>
+          ) : (
+            <span className={`countdown ${isLocked ? 'countdown-urgent' : ''}`}>
+              {timeRemaining}
+            </span>
+          )}
         </div>
 
         <div className="match-teams" style={{ margin: 'var(--space-8) 0' }}>
@@ -302,11 +313,11 @@ export default function MatchDetail() {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-2)' }}>
-            {match.status === 'finished' ? (
+            {match.status === 'finished' || match.status === 'active' ? (
               <div style={{ fontSize: 'var(--font-4xl)', fontWeight: '900', display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
-                <span>{match.home_score}</span>
+                <span>{match.home_score !== null ? match.home_score : 0}</span>
                 <span style={{ fontSize: 'var(--font-xl)', color: 'var(--text-muted)' }}>x</span>
-                <span>{match.away_score}</span>
+                <span>{match.away_score !== null ? match.away_score : 0}</span>
               </div>
             ) : (
               <div style={{ fontSize: 'var(--font-2xl)', fontWeight: '700', color: 'var(--text-muted)' }}>VS</div>
@@ -326,8 +337,29 @@ export default function MatchDetail() {
           </div>
         </div>
 
+        {/* Seção de gols/artilheiros */}
+        {(match.status === 'finished' || match.status === 'active') && (match.home_scorers || match.away_scorers) && (
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 'var(--space-8)', padding: 'var(--space-4)', background: 'rgba(255,255,255,0.01)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', marginTop: 'var(--space-4)', maxWidth: '500px', margin: 'var(--space-4) auto var(--space-4) auto' }}>
+            <div style={{ flex: 1, textAlign: 'right', fontSize: 'var(--font-sm)', color: 'var(--text-secondary)' }}>
+              {match.home_scorers ? formatScorers(match.home_scorers).split(', ').map((s, idx) => (
+                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-end', marginBottom: '4px' }}>
+                  <span>{s}</span> <span style={{ fontSize: '12px' }}>⚽</span>
+                </div>
+              )) : null}
+            </div>
+            <div style={{ width: '1px', background: 'var(--border-color)' }} />
+            <div style={{ flex: 1, textAlign: 'left', fontSize: 'var(--font-sm)', color: 'var(--text-secondary)' }}>
+              {match.away_scorers ? formatScorers(match.away_scorers).split(', ').map((s, idx) => (
+                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-start', marginBottom: '4px' }}>
+                  <span style={{ fontSize: '12px' }}>⚽</span> <span>{s}</span>
+                </div>
+              )) : null}
+            </div>
+          </div>
+        )}
+
         {match.status === 'finished' && (
-          <div style={{ background: 'var(--accent-green-glow)', color: 'var(--accent-green)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', display: 'inline-block', fontWeight: '600', fontSize: 'var(--font-sm)' }}>
+          <div style={{ background: 'var(--accent-green-glow)', color: 'var(--accent-green)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', display: 'inline-block', fontWeight: '600', fontSize: 'var(--font-sm)', marginTop: 'var(--space-2)' }}>
             Resultado Final Oficial da Partida 🏆
           </div>
         )}

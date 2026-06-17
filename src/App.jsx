@@ -18,6 +18,7 @@ import GroupDetail from './pages/GroupDetail'
 import Profile from './pages/Profile'
 import Admin from './pages/Admin'
 import Rules from './pages/Rules'
+import Standings from './pages/Standings'
 
 export default function App() {
   return (
@@ -39,6 +40,7 @@ export default function App() {
                 <Route path="/ranking" element={<Ranking />} />
                 <Route path="/groups" element={<Groups />} />
                 <Route path="/groups/:id" element={<GroupDetail />} />
+                <Route path="/standings" element={<Standings />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/rules" element={<Rules />} />
                 <Route path="/admin" element={<Admin />} />

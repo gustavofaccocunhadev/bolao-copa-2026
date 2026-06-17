@@ -30,6 +30,7 @@ export default function Layout() {
   const navLinks = [
     { to: '/dashboard', icon: '🏠', label: 'Dashboard' },
     { to: '/matches', icon: '⚽', label: 'Partidas' },
+    { to: '/standings', icon: '📊', label: 'Classificação' },
     { to: '/ranking', icon: '🏆', label: 'Ranking' },
     { to: '/groups', icon: '👥', label: 'Grupos' },
     { to: '/rules', icon: '📋', label: 'Regras' },

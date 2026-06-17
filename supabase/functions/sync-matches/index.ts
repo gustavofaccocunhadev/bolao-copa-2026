@@ -303,13 +303,26 @@ Deno.serve(async (req) => {
         stage = 'final';
       }
 
+      let homeScorersStr = null;
+      if (jsonMatch.home_scorers && jsonMatch.home_scorers !== 'null' && jsonMatch.home_scorers !== 'NULL') {
+        homeScorersStr = jsonMatch.home_scorers;
+      }
+      
+      let awayScorersStr = null;
+      if (jsonMatch.away_scorers && jsonMatch.away_scorers !== 'null' && jsonMatch.away_scorers !== 'NULL') {
+        awayScorersStr = jsonMatch.away_scorers;
+      }
+
       const needsTeamsUpdate = 
         dbMatch.home_team !== homeTeamName || 
         dbMatch.away_team !== awayTeamName || 
         dbMatch.home_flag !== homeFlagImg || 
         dbMatch.away_flag !== awayFlagImg ||
         dbMatch.group_label !== groupLabel ||
-        dbMatch.stage !== stage;
+        dbMatch.stage !== stage ||
+        dbMatch.home_scorers !== homeScorersStr ||
+        dbMatch.away_scorers !== awayScorersStr ||
+        dbMatch.time_elapsed !== jsonMatch.time_elapsed;
 
       const needsDateUpdate = jsonMatch.local_date && (new Date(dbMatch.scheduled_at).getTime() !== new Date(apiScheduledAt).getTime());
 
@@ -323,26 +336,42 @@ Deno.serve(async (req) => {
             away_flag: awayFlagImg,
             scheduled_at: apiScheduledAt,
             group_label: groupLabel,
-            stage: stage
+            stage: stage,
+            home_scorers: homeScorersStr,
+            away_scorers: awayScorersStr,
+            time_elapsed: jsonMatch.time_elapsed
           })
           .eq('id', dbMatch.id);
         updatedCount++;
       }
 
       if (isFinished && dbMatch.status !== 'finished') {
+        // Primeiro atualiza os scorers e o time_elapsed
+        await supabase
+          .from('matches')
+          .update({
+            home_scorers: homeScorersStr,
+            away_scorers: awayScorersStr,
+            time_elapsed: jsonMatch.time_elapsed
+          })
+          .eq('id', dbMatch.id);
+
         const { error: finalizeError } = await supabase.rpc('finalize_match', {
           p_match_id: dbMatch.id,
           p_home_score: apiHomeScore,
           p_away_score: apiAwayScore
         });
         if (!finalizeError) finalizedCount++;
-      } else if (!isFinished && (dbMatch.home_score !== apiHomeScore || dbMatch.away_score !== apiAwayScore || dbMatch.status !== status)) {
+      } else if (!isFinished && (dbMatch.home_score !== apiHomeScore || dbMatch.away_score !== apiAwayScore || dbMatch.status !== status || dbMatch.home_scorers !== homeScorersStr || dbMatch.away_scorers !== awayScorersStr || dbMatch.time_elapsed !== jsonMatch.time_elapsed)) {
         await supabase
           .from('matches')
           .update({
             home_score: apiHomeScore,
             away_score: apiAwayScore,
-            status: status
+            status: status,
+            home_scorers: homeScorersStr,
+            away_scorers: awayScorersStr,
+            time_elapsed: jsonMatch.time_elapsed
           })
           .eq('id', dbMatch.id);
         updatedCount++;

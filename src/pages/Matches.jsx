@@ -16,7 +16,7 @@ const STAGE_LABELS = {
 
 const GROUP_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L']
 
-import { getFlagUrl, isMatchConfirmed } from '../lib/flags'
+import { getFlagUrl, isMatchConfirmed, formatScorers } from '../lib/flags'
 
 export default function Matches() {
   const { user } = useAuth()
@@ -343,16 +343,24 @@ export default function Matches() {
                     <span style={{ color: 'var(--text-secondary)' }}>
                       {formatDate(match.scheduled_at)}
                     </span>
-                    {countdown && !locked && (
-                      <span className={`countdown ${new Date(match.scheduled_at) - currentTime < 3600000 ? 'countdown-urgent' : ''}`} style={{ fontSize: '10px', padding: '2px 8px' }}>
-                        ⏱️ {countdown}
+                    {match.status === 'active' ? (
+                      <span className="live-badge-timer" style={{ background: '#ef4444', color: '#fff', fontSize: '9px', fontWeight: 'bold', padding: '2px 8px', borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', gap: '4px', textTransform: 'uppercase', animation: 'pulse 1.5s infinite' }}>
+                        <span className="pulse-dot" style={{ width: '6px', height: '6px', backgroundColor: '#fff', borderRadius: '50%', display: 'inline-block' }} />
+                        AO VIVO {match.time_elapsed && match.time_elapsed !== 'notstarted' ? `• ${match.time_elapsed}` : ''}
                       </span>
-                    )}
-                    {locked && (
+                    ) : match.status === 'finished' ? (
+                      <span className="status-badge status-finished" style={{ fontSize: '10px', padding: '2px 8px', background: 'rgba(16, 185, 129, 0.1)', color: 'var(--accent-green)', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                        ✓ Encerrado
+                      </span>
+                    ) : locked ? (
                       <span className="status-badge status-locked" style={{ fontSize: '10px', padding: '2px 8px' }}>
                         🔒 Fechado
                       </span>
-                    )}
+                    ) : countdown ? (
+                      <span className={`countdown ${new Date(match.scheduled_at) - currentTime < 3600000 ? 'countdown-urgent' : ''}`} style={{ fontSize: '10px', padding: '2px 8px' }}>
+                        ⏱️ {countdown}
+                      </span>
+                    ) : null}
                   </div>
                 </div>
 
@@ -476,6 +484,28 @@ export default function Matches() {
                   </div>
 
                 </div>
+
+                {/* Artilheiros se o jogo estiver ativo ou finalizado */}
+                {(match.status === 'finished' || match.status === 'active') && (match.home_scorers || match.away_scorers) && (
+                  <div className="match-scorers" style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-4)', fontSize: '11px', color: 'var(--text-secondary)', padding: 'var(--space-2) var(--space-3)', background: 'rgba(255,255,255,0.02)', borderRadius: 'var(--radius-sm)', borderTop: '1px solid rgba(255,255,255,0.04)', marginTop: 'var(--space-2)' }}>
+                    <div style={{ flex: 1, textAlign: 'left', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                      {match.home_scorers && (
+                        <>
+                          <span style={{ fontSize: '10px' }}>⚽</span>
+                          <span>{formatScorers(match.home_scorers)}</span>
+                        </>
+                      )}
+                    </div>
+                    <div style={{ flex: 1, textAlign: 'right', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                      {match.away_scorers && (
+                        <>
+                          <span>{formatScorers(match.away_scorers)}</span>
+                          <span style={{ fontSize: '10px' }}>⚽</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* Ações / Rodapé do Card */}
                 <div style={{ marginTop: 'var(--space-4)', paddingTop: 'var(--space-4)', borderTop: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
