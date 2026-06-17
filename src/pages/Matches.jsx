@@ -238,6 +238,13 @@ export default function Matches() {
     return true
   })
 
+  // Ordenação dinâmica: se for "fechadas" (closed), mostra os mais recentes primeiro
+  const sortedFiltered = [...filtered].sort((a, b) => {
+    const dateA = new Date(a.scheduled_at).getTime()
+    const dateB = new Date(b.scheduled_at).getTime()
+    return statusTab === 'closed' ? dateB - dateA : dateA - dateB
+  })
+
   if (loading) {
     return (
       <div className="page-container">
@@ -306,7 +313,7 @@ export default function Matches() {
       )}
 
       {/* Grid de Partidas */}
-      {filtered.length === 0 ? (
+      {sortedFiltered.length === 0 ? (
         <div className="empty-state card">
           <div className="empty-icon">⚽</div>
           <p className="empty-text">
@@ -317,7 +324,7 @@ export default function Matches() {
         </div>
       ) : (
         <div className="grid-2">
-          {filtered.map((match) => {
+          {sortedFiltered.map((match) => {
             const locked = isLocked(match)
             const hasGuess = !!guesses[match.id]
             const score = tempScores[match.id] || { home: 0, away: 0 }
