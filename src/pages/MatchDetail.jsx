@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
@@ -9,12 +9,15 @@ export default function MatchDetail() {
   const { id } = useParams()
   const { user } = useAuth()
   const { addToast } = useToast()
+  const [searchParams] = useSearchParams()
+  const groupId = searchParams.get('groupId')
 
   const [match, setMatch] = useState(null)
   const [myGuess, setMyGuess] = useState(null)
   const [allGuesses, setAllGuesses] = useState([])
   const [homeScoreInput, setHomeScoreInput] = useState('')
   const [awayScoreInput, setAwayScoreInput] = useState('')
+  const [groupName, setGroupName] = useState('')
   
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -97,6 +100,26 @@ export default function MatchDetail() {
         setAwayScoreInput(guessData.away_score.toString())
       }
 
+      // Busca informações do grupo de amigos se groupId for fornecido
+      let groupMembersList = []
+      if (groupId) {
+        // Busca nome do grupo
+        const { data: grp } = await supabase
+          .from('groups')
+          .select('name')
+          .eq('id', groupId)
+          .single()
+        if (grp) setGroupName(grp.name)
+
+        // Busca membros do grupo
+        const { data: members } = await supabase
+          .from('group_members')
+          .select('user_id')
+          .eq('group_id', groupId)
+        
+        groupMembersList = (members || []).map(m => m.user_id)
+      }
+
       // 3. Busca todos os palpites globais da partida (só se estiver bloqueada/finalizada)
       if (lockedState) {
         const { data: allGuessesData, error: allGuessesError } = await supabase
@@ -119,8 +142,12 @@ export default function MatchDetail() {
         if (allGuessesError) {
           console.log('Não foi possível ler outros palpites (RLS ativa).')
         } else {
+          let filteredGuesses = allGuessesData || []
+          if (groupId && groupMembersList.length > 0) {
+            filteredGuesses = filteredGuesses.filter(g => groupMembersList.includes(g.user_id))
+          }
           // Ordena os palpites por pontos desc, exatos desc, etc.
-          const sorted = (allGuessesData || []).sort((a, b) => (b.points || 0) - (a.points || 0))
+          const sorted = filteredGuesses.sort((a, b) => (b.points || 0) - (a.points || 0))
           setAllGuesses(sorted)
         }
       }
@@ -244,8 +271,11 @@ export default function MatchDetail() {
   return (
     <div className="page-container">
       <div style={{ marginBottom: 'var(--space-6)' }}>
-        <Link to="/matches" style={{ color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-          ← Voltar para Partidas
+        <Link 
+          to={groupId ? `/groups/${groupId}` : "/matches"} 
+          style={{ color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)', textDecoration: 'none', fontWeight: '500' }}
+        >
+          {groupId ? '← Voltar para o Grupo' : '← Voltar para Partidas'}
         </Link>
       </div>
 
@@ -442,7 +472,7 @@ export default function MatchDetail() {
         {/* Palpites da Galera */}
         <div className="card">
           <h2 style={{ fontSize: 'var(--font-lg)', fontWeight: '700', marginBottom: 'var(--space-6)' }}>
-            Palpites da Comunidade
+            {groupId && groupName ? `Palpites do Grupo — ${groupName}` : 'Palpites da Comunidade'}
           </h2>
 
           {!isLocked ? (

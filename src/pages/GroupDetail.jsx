@@ -72,14 +72,21 @@ export default function GroupDetail() {
       if (membersError) throw membersError
       setMembers(membersData || [])
 
-      // 4. Busca todos os palpites associados a este grupo
-      const { data: guessesData, error: guessesError } = await supabase
-        .from('guesses')
-        .select('*')
-        .eq('group_id', id)
+      // 4. Busca os palpites globais de todos os membros do grupo
+      const memberUserIds = (membersData || []).map((m) => m.user_id)
+      let guessesData = []
+      
+      if (memberUserIds.length > 0) {
+        const { data: gData, error: guessesError } = await supabase
+          .from('guesses')
+          .select('*')
+          .in('user_id', memberUserIds)
+          .is('group_id', null)
 
-      if (guessesError) throw guessesError
-      setGuesses(guessesData || [])
+        if (guessesError) throw guessesError
+        guessesData = gData || []
+      }
+      setGuesses(guessesData)
 
       // 5. Busca partidas para exibir na aba de palpites
       const { data: matchesData, error: matchesError } = await supabase
@@ -390,6 +397,12 @@ export default function GroupDetail() {
                         })}
                       </div>
                     )}
+
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'var(--space-4)', paddingTop: 'var(--space-3)', borderTop: '1px solid var(--border-color)' }}>
+                      <Link to={`/matches/${match.id}?groupId=${id}`} style={{ fontSize: 'var(--font-xs)', color: 'var(--accent-green)', fontWeight: '600', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        Ver Todos os Palpites →
+                      </Link>
+                    </div>
                   </div>
                 )
               })
