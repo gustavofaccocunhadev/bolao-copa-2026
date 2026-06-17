@@ -31,6 +31,7 @@ export default function Matches() {
   
   const [stageFilter, setStageFilter] = useState('all')
   const [groupFilter, setGroupFilter] = useState('all')
+  const [statusTab, setStatusTab] = useState('open') // 'open' ou 'closed'
   
   const [currentTime, setCurrentTime] = useState(new Date())
 
@@ -229,6 +230,11 @@ export default function Matches() {
   const filtered = matches.filter((m) => {
     if (stageFilter !== 'all' && m.stage !== stageFilter) return false
     if (stageFilter === 'group_stage' && groupFilter !== 'all' && m.group_label !== `Grupo ${groupFilter}`) return false
+    
+    const locked = isLocked(m)
+    if (statusTab === 'open' && locked) return false
+    if (statusTab === 'closed' && !locked) return false
+    
     return true
   })
 
@@ -245,6 +251,24 @@ export default function Matches() {
       <div className="page-header">
         <h1 className="page-title">Palpitar ⚽</h1>
         <p className="page-subtitle">Preencha seus palpites diretamente nos cards abaixo</p>
+      </div>
+
+      {/* Abas de Status */}
+      <div className="tab-container">
+        <button
+          type="button"
+          className={`tab-btn ${statusTab === 'open' ? 'active' : ''}`}
+          onClick={() => setStatusTab('open')}
+        >
+          📝 Palpites Abertos
+        </button>
+        <button
+          type="button"
+          className={`tab-btn ${statusTab === 'closed' ? 'active' : ''}`}
+          onClick={() => setStatusTab('closed')}
+        >
+          🔒 Fechados / Encerrados
+        </button>
       </div>
 
       {/* Stage filter */}
@@ -285,7 +309,11 @@ export default function Matches() {
       {filtered.length === 0 ? (
         <div className="empty-state card">
           <div className="empty-icon">⚽</div>
-          <p className="empty-text">Nenhuma partida encontrada.</p>
+          <p className="empty-text">
+            {statusTab === 'open' 
+              ? 'Nenhum palpite aberto neste momento. Todas as partidas desta fase já começaram ou estão fechadas!' 
+              : 'Nenhuma partida encerrada ou fechada encontrada para esta fase.'}
+          </p>
         </div>
       ) : (
         <div className="grid-2">
