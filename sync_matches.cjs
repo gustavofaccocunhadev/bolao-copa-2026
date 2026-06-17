@@ -245,6 +245,27 @@ async function run() {
         }
       }
 
+      // Determina o group_label e o stage com base no ID da partida e no grupo da API
+      let groupLabel = "NULL";
+      let stage = "NULL";
+      
+      if (matchId >= 1 && matchId <= 72) {
+        stage = "'group_stage'";
+        if (g.group) {
+          groupLabel = escapeSQL(`Grupo ${g.group}`);
+        }
+      } else if (matchId >= 73 && matchId <= 88) {
+        stage = "'round_of_32'";
+      } else if (matchId >= 89 && matchId <= 96) {
+        stage = "'round_of_16'";
+      } else if (matchId >= 97 && matchId <= 100) {
+        stage = "'quarterfinal'";
+      } else if (matchId >= 101 && matchId <= 102) {
+        stage = "'semifinal'";
+      } else if (matchId >= 103 && matchId <= 104) {
+        stage = "'final'";
+      }
+
       // Constrói o comando de UPDATE de forma cirúrgica
       let query = `UPDATE public.matches SET ${dateQuery}`;
       
@@ -256,8 +277,8 @@ async function run() {
         query += `away_team = ${awayTeam}, away_flag = ${awayFlag}, `;
       }
       
-      // Atualiza placares, status
-      query += `home_score = ${homeScore}, away_score = ${awayScore}, status = ${escapeSQL(status)} `;
+      // Atualiza placares, status, stage e group_label
+      query += `home_score = ${homeScore}, away_score = ${awayScore}, status = ${escapeSQL(status)}, stage = ${stage}, group_label = ${groupLabel} `;
       query += `WHERE id = ${matchId};`;
 
       sqlStatements.push(query);

@@ -283,11 +283,33 @@ Deno.serve(async (req) => {
         }
       }
 
+      let groupLabel = null;
+      let stage = dbMatch.stage;
+      
+      if (matchId >= 1 && matchId <= 72) {
+        stage = 'group_stage';
+        if (jsonMatch.group) {
+          groupLabel = `Grupo ${jsonMatch.group}`;
+        }
+      } else if (matchId >= 73 && matchId <= 88) {
+        stage = 'round_of_32';
+      } else if (matchId >= 89 && matchId <= 96) {
+        stage = 'round_of_16';
+      } else if (matchId >= 97 && matchId <= 100) {
+        stage = 'quarterfinal';
+      } else if (matchId >= 101 && matchId <= 102) {
+        stage = 'semifinal';
+      } else if (matchId >= 103 && matchId <= 104) {
+        stage = 'final';
+      }
+
       const needsTeamsUpdate = 
         dbMatch.home_team !== homeTeamName || 
         dbMatch.away_team !== awayTeamName || 
         dbMatch.home_flag !== homeFlagImg || 
-        dbMatch.away_flag !== awayFlagImg;
+        dbMatch.away_flag !== awayFlagImg ||
+        dbMatch.group_label !== groupLabel ||
+        dbMatch.stage !== stage;
 
       const needsDateUpdate = jsonMatch.local_date && (new Date(dbMatch.scheduled_at).getTime() !== new Date(apiScheduledAt).getTime());
 
@@ -299,7 +321,9 @@ Deno.serve(async (req) => {
             home_flag: homeFlagImg,
             away_team: awayTeamName,
             away_flag: awayFlagImg,
-            scheduled_at: apiScheduledAt
+            scheduled_at: apiScheduledAt,
+            group_label: groupLabel,
+            stage: stage
           })
           .eq('id', dbMatch.id);
         updatedCount++;
