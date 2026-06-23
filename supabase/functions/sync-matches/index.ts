@@ -113,6 +113,22 @@ function translateLabel(label: string | null): string | null {
   return translated;
 }
 
+const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeoutMs = 10000) => {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+    clearTimeout(id);
+    return response;
+  } catch (error) {
+    clearTimeout(id);
+    throw error;
+  }
+};
+
 Deno.serve(async (req) => {
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -172,47 +188,84 @@ Deno.serve(async (req) => {
       });
     }
 
-    console.log("Iniciando sincronização...");
-    const API_URL = "https://worldcup26.ir";
-    const email = "bolao_sincronizador@bolao.com";
-    const password = "SyncSecurePassword123!";
-    
-    let token = null;
+    let games: any[] = [];
+    try {
+      console.log("Iniciando conexão com a API externa...");
+      const API_URL = "https://worldcup26.ir";
+      const email = "bolao_sincronizador@bolao.com";
+      const password = "SyncSecurePassword123!";
+      
+      let token = null;
 
-    const authRes = await fetch(`${API_URL}/auth/authenticate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password })
-    });
-    
-    const authData = await authRes.json();
-    
-    if (authData.error && (authData.error === "User not found" || (authData.error.message && authData.error.message.includes("not found")))) {
-      const regRes = await fetch(`${API_URL}/auth/register`, {
+      const authRes = await fetchWithTimeout(`${API_URL}/auth/authenticate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: "Bolao Sync Engine", email, password })
+        body: JSON.stringify({ email, password })
       });
-      const regData = await regRes.json();
-      token = regData.token;
-    } else {
-      token = authData.token;
-    }
+      
+      if (!authRes.ok) {
+        throw new Error(`Erro HTTP ${authRes.status} ao autenticar.`);
+      }
 
-    if (!token) {
-      throw new Error("Não foi possível autenticar na API externa.");
-    }
+      let authData;
+      try {
+        authData = await authRes.json();
+      } catch (_e) {
+        throw new Error("Formato inválido recebido no login (HTML/texto).");
+      }
+      
+      if (authData.error && (authData.error === "User not found" || (authData.error.message && authData.error.message.includes("not found")))) {
+        console.log("Sincronizador não registrado. Cadastrando...");
+        const regRes = await fetchWithTimeout(`${API_URL}/auth/register`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: "Bolao Sync Engine", email, password })
+        });
+        if (!regRes.ok) {
+          throw new Error(`Erro HTTP ${regRes.status} ao registrar.`);
+        }
+        let regData;
+        try {
+          regData = await regRes.json();
+        } catch (_e) {
+          throw new Error("Formato inválido recebido no cadastro.");
+        }
+        token = regData.token;
+      } else {
+        token = authData.token;
+      }
 
-    const gamesRes = await fetch(`${API_URL}/get/games`, {
-      headers: { "Authorization": `Bearer ${token}` }
-    });
-    if (!gamesRes.ok) throw new Error("Erro ao baixar jogos da API.");
-    
-    const gamesData = await gamesRes.json();
-    const games = gamesData.data || gamesData.games || gamesData;
+      if (!token) {
+        throw new Error("Token ausente na resposta de autenticação.");
+      }
 
-    if (!Array.isArray(games)) {
-      throw new Error("Dados de jogos inválidos recebidos da API.");
+      const gamesRes = await fetchWithTimeout(`${API_URL}/get/games`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (!gamesRes.ok) throw new Error(`Erro HTTP ${gamesRes.status} ao buscar jogos.`);
+      
+      let gamesData;
+      try {
+        gamesData = await gamesRes.json();
+      } catch (_e) {
+        throw new Error("Formato de retorno inválido ao buscar jogos.");
+      }
+      games = gamesData.data || gamesData.games || gamesData;
+
+      if (!Array.isArray(games)) {
+        throw new Error("Retorno de partidas não é um array válido.");
+      }
+    } catch (apiErr: any) {
+      console.error("Erro na API externa:", apiErr.message);
+      // Retornar 200 indicando a falha de conexão externa em vez de 500 para evitar e-mails de alerta do cron-job.org
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: `Conexão falhou com a API externa: ${apiErr.message}`,
+        timestamp: new Date().toISOString()
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
     }
 
     const { data: dbMatches, error: dbError } = await supabase
@@ -260,7 +313,7 @@ Deno.serve(async (req) => {
 
       const isFinished = String(jsonMatch.finished).toUpperCase() === "TRUE";
       const apiHomeScore = (isFinished || jsonMatch.home_score !== "0" || jsonMatch.away_score !== "0") ? parseInt(jsonMatch.home_score, 10) : null;
-      const apiAwayScore = (isFinished || jsonMatch.home_score !== "0" || jsonMatch.away_score !== "0") ? parseInt(jsonMatch.away_score, 10) : null;
+      const apiAwayScore = (isFinished || jsonMatch.away_score !== "0" || jsonMatch.away_score !== "0") ? parseInt(jsonMatch.away_score, 10) : null;
 
       let status = "upcoming";
       if (isFinished) {
@@ -283,7 +336,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      let groupLabel = null;
+      let groupLabel = dbMatch.group_label;
       let stage = dbMatch.stage;
       
       if (matchId >= 1 && matchId <= 72) {
@@ -313,48 +366,29 @@ Deno.serve(async (req) => {
         awayScorersStr = jsonMatch.away_scorers;
       }
 
-      const needsTeamsUpdate = 
-        dbMatch.home_team !== homeTeamName || 
-        dbMatch.away_team !== awayTeamName || 
-        dbMatch.home_flag !== homeFlagImg || 
-        dbMatch.away_flag !== awayFlagImg ||
-        dbMatch.group_label !== groupLabel ||
-        dbMatch.stage !== stage ||
-        dbMatch.home_scorers !== homeScorersStr ||
-        dbMatch.away_scorers !== awayScorersStr ||
-        dbMatch.time_elapsed !== jsonMatch.time_elapsed;
-
       const needsDateUpdate = jsonMatch.local_date && (new Date(dbMatch.scheduled_at).getTime() !== new Date(apiScheduledAt).getTime());
 
-      if (needsTeamsUpdate || needsDateUpdate) {
-        await supabase
-          .from('matches')
-          .update({
-            home_team: homeTeamName,
-            home_flag: homeFlagImg,
-            away_team: awayTeamName,
-            away_flag: awayFlagImg,
-            scheduled_at: apiScheduledAt,
-            group_label: groupLabel,
-            stage: stage,
-            home_scorers: homeScorersStr,
-            away_scorers: awayScorersStr,
-            time_elapsed: jsonMatch.time_elapsed
-          })
-          .eq('id', dbMatch.id);
-        updatedCount++;
-      }
-
+      // Jogo finalizou e precisa recalcular pontos
       if (isFinished && dbMatch.status !== 'finished') {
-        // Primeiro atualiza os scorers e o time_elapsed
-        await supabase
-          .from('matches')
-          .update({
-            home_scorers: homeScorersStr,
-            away_scorers: awayScorersStr,
-            time_elapsed: jsonMatch.time_elapsed
-          })
-          .eq('id', dbMatch.id);
+        const metadataPayload: Record<string, any> = {};
+        if (dbMatch.home_team !== homeTeamName) metadataPayload.home_team = homeTeamName;
+        if (dbMatch.away_team !== awayTeamName) metadataPayload.away_team = awayTeamName;
+        if (dbMatch.home_flag !== homeFlagImg) metadataPayload.home_flag = homeFlagImg;
+        if (dbMatch.away_flag !== awayFlagImg) metadataPayload.away_flag = awayFlagImg;
+        if (dbMatch.group_label !== groupLabel) metadataPayload.group_label = groupLabel;
+        if (dbMatch.stage !== stage) metadataPayload.stage = stage;
+        if (dbMatch.home_scorers !== homeScorersStr) metadataPayload.home_scorers = homeScorersStr;
+        if (dbMatch.away_scorers !== awayScorersStr) metadataPayload.away_scorers = awayScorersStr;
+        if (dbMatch.time_elapsed !== jsonMatch.time_elapsed) metadataPayload.time_elapsed = jsonMatch.time_elapsed;
+        if (needsDateUpdate) metadataPayload.scheduled_at = apiScheduledAt;
+
+        if (Object.keys(metadataPayload).length > 0) {
+          await supabase
+            .from('matches')
+            .update(metadataPayload)
+            .eq('id', dbMatch.id);
+          updatedCount++;
+        }
 
         const { error: finalizeError } = await supabase.rpc('finalize_match', {
           p_match_id: dbMatch.id,
@@ -362,19 +396,30 @@ Deno.serve(async (req) => {
           p_away_score: apiAwayScore
         });
         if (!finalizeError) finalizedCount++;
-      } else if (!isFinished && (dbMatch.home_score !== apiHomeScore || dbMatch.away_score !== apiAwayScore || dbMatch.status !== status || dbMatch.home_scorers !== homeScorersStr || dbMatch.away_scorers !== awayScorersStr || dbMatch.time_elapsed !== jsonMatch.time_elapsed)) {
-        await supabase
-          .from('matches')
-          .update({
-            home_score: apiHomeScore,
-            away_score: apiAwayScore,
-            status: status,
-            home_scorers: homeScorersStr,
-            away_scorers: awayScorersStr,
-            time_elapsed: jsonMatch.time_elapsed
-          })
-          .eq('id', dbMatch.id);
-        updatedCount++;
+      } else {
+        // Jogo em andamento ou atualizações gerais simples
+        const updatePayload: Record<string, any> = {};
+        if (dbMatch.home_team !== homeTeamName) updatePayload.home_team = homeTeamName;
+        if (dbMatch.away_team !== awayTeamName) updatePayload.away_team = awayTeamName;
+        if (dbMatch.home_flag !== homeFlagImg) updatePayload.home_flag = homeFlagImg;
+        if (dbMatch.away_flag !== awayFlagImg) updatePayload.away_flag = awayFlagImg;
+        if (dbMatch.group_label !== groupLabel) updatePayload.group_label = groupLabel;
+        if (dbMatch.stage !== stage) updatePayload.stage = stage;
+        if (dbMatch.home_scorers !== homeScorersStr) updatePayload.home_scorers = homeScorersStr;
+        if (dbMatch.away_scorers !== awayScorersStr) updatePayload.away_scorers = awayScorersStr;
+        if (dbMatch.time_elapsed !== jsonMatch.time_elapsed) updatePayload.time_elapsed = jsonMatch.time_elapsed;
+        if (dbMatch.home_score !== apiHomeScore) updatePayload.home_score = apiHomeScore;
+        if (dbMatch.away_score !== apiAwayScore) updatePayload.away_score = apiAwayScore;
+        if (dbMatch.status !== status) updatePayload.status = status;
+        if (needsDateUpdate) updatePayload.scheduled_at = apiScheduledAt;
+
+        if (Object.keys(updatePayload).length > 0) {
+          await supabase
+            .from('matches')
+            .update(updatePayload)
+            .eq('id', dbMatch.id);
+          updatedCount++;
+        }
       }
     }
 
