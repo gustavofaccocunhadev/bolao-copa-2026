@@ -64,3 +64,20 @@ Definidas em `src/App.jsx` e renderizadas com auxílio do `src/components/Layout
 3. **Padrão de Commit**: Toda alteração salva no GitHub deve seguir o seguinte formato:
    `Nome da alteração • YYYY-MM-DD • HH:MM` (ex: `Adiciona tela de regras e pontuação • 2026-06-12 • 14:14`).
 4. **Tratamento de Dados**: Ao excluir conta no perfil, certifique-se de que a trigger ou requisição limpe de forma em cascata todos os dados de palpites (`guesses`) e grupos (`groups`/`group_members`) do usuário.
+
+---
+
+## 🕒 Histórico de Alterações / Arquitetura Recente
+
+### Junho de 2026
+1. **Ativação do Realtime (Tempo Real)**:
+   * Incluída a tabela `matches` na publicação `supabase_realtime` (`ALTER PUBLICATION supabase_realtime ADD TABLE public.matches;`).
+   * Agora, atualizações de gols e status propagam instantaneamente para as telas dos usuários conectados sem recarregamento.
+2. **Sincronização Nativa no Banco (pg_cron + pg_net)**:
+   * Habilitadas as extensões `pg_cron` e `pg_net` no banco de dados.
+   * Criado o job automático `sync-matches-every-2-minutes` que roda a cada 2 minutos disparando um GET via `pg_net.http_get` na Edge Function do Supabase. Isso elimina a dependência e instabilidade de crons externas (como o `cron-job.org`).
+3. **Melhorias de Resiliência na Edge/Netlify Function**:
+   * Adicionado `timeout` de 10s no consumo da API externa (`worldcup26.ir`) e tratamento de erros graciosos (retornando status 200 com `{ success: false }` em vez de explodir com erro 500) para evitar que a função trave quando a API externa oscilar.
+4. **Correção do Bug do Placar nulo (0 gols)**:
+   * Corrigido o mapeamento do placar que transformava em `null` (em branco) o resultado de times que possuíam `0` gols durante as partidas em andamento. Agora o banco armazena o número `0` corretamente.
+
