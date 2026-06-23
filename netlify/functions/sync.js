@@ -312,13 +312,14 @@ export async function handler(event, context) {
       }
 
       const isFinished = String(jsonMatch.finished).toUpperCase() === "TRUE";
-      const apiHomeScore = (isFinished || jsonMatch.home_score !== "0" || jsonMatch.away_score !== "0") ? parseInt(jsonMatch.home_score, 10) : null;
-      const apiAwayScore = (isFinished || jsonMatch.away_score !== "0" || jsonMatch.away_score !== "0") ? parseInt(jsonMatch.away_score, 10) : null;
+      const isStarted = jsonMatch.time_elapsed && jsonMatch.time_elapsed !== "notstarted";
+      const apiHomeScore = (isFinished || isStarted) ? parseInt(jsonMatch.home_score, 10) : null;
+      const apiAwayScore = (isFinished || isStarted) ? parseInt(jsonMatch.away_score, 10) : null;
 
       let status = "upcoming";
       if (isFinished) {
         status = "finished";
-      } else if (jsonMatch.time_elapsed && jsonMatch.time_elapsed !== "notstarted") {
+      } else if (isStarted) {
         status = "active";
       }
 
